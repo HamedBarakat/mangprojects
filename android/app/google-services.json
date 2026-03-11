@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "569805089105",
+    "project_id": "mangprojects",
+    "storage_bucket": "mangprojects.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:569805089105:android:6dbf41c2080f6b96020b70",
+        "android_client_info": {
+          "package_name": "com.afaq"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdPIzj484bvYgbtMsGM1wVnnEVlzr8uD0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:569805089105:android:e270c15bdcd988d0020b70",
+        "android_client_info": {
+          "package_name": "com.afaq.mang_projects"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdPIzj484bvYgbtMsGM1wVnnEVlzr8uD0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
