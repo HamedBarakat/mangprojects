@@ -243,8 +243,15 @@ class TaskRepository {
     required String logId,
     required double hours,
   }) async {
+    // Firestore can't query nested fields inside arrays,
+    // so we fetch all logs for the same officeId and filter in Dart
+    final taskDoc = await _tasks.doc(taskId).get();
+    final officeId =
+        (taskDoc.data() as Map<String, dynamic>?)?['officeId'] ?? '';
+    if (officeId.isEmpty) return;
+
     final allLogs = await _dailyLogs
-        .where('entries', arrayContains: {'taskId': taskId})
+        .where('officeId', isEqualTo: officeId)
         .get();
 
     double total = 0;
@@ -254,6 +261,7 @@ class TaskRepository {
         if (entry.taskId == taskId) total += entry.hours;
       }
     }
+
     await _tasks.doc(taskId).update({'actualHours': total});
   }
 
