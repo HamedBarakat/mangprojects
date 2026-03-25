@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,12 +32,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  // ── Change Office ──────────────────────────────────────────────────────────
-
   Future<void> _changeOffice() async {
-    final prefs   = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     final storage = LocalStorageService(prefs);
-    await storage.clearOffice(); // مسح كل شيء
+    await storage.clearOffice();
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const EnterOfficeCodeScreen()),
@@ -46,8 +45,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _markSetupAndNavigate() async {
-    // بعد login ناجح — نعمل markOfficeSetupComplete عشان AuthWrapper ميرجعناش
-    final prefs   = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     final storage = LocalStorageService(prefs);
     await storage.markOfficeSetupComplete();
     if (mounted) {
@@ -58,8 +56,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  // ── Login ──────────────────────────────────────────────────────────────────
-
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -69,18 +65,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      await ref
-          .read(authRepositoryProvider)
-          .login(
-            email: _emailController.text.trim(),
-            password: _passwordController.text.trim(),
-          );
+      await ref.read(authRepositoryProvider).login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
 
       // Save credentials in memory for developer session
       ref.read(devCredentialsProvider.notifier).state = DevCredentials(
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
+
+      // Android: update the androidAuthUidProvider so AuthWrapper reacts
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        final uid = ref.read(authRepositoryProvider).getAndroidUid();
+        if (uid != null) {
+          ref.read(androidAuthUidProvider.notifier).state = uid;
+        }
+      }
 
       if (mounted) {
         await _markSetupAndNavigate();
@@ -92,23 +94,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  // ── Forgot password ────────────────────────────────────────────────────────
-
   Future<void> _forgotPassword() async {
     final email = _emailController.text.trim();
-
     if (email.isEmpty) {
-      setState(
-        () =>
-            _errorMessage = 'Enter your email first, then tap Forgot Password.',
-      );
+      setState(() => _errorMessage = 'Enter your email first, then tap Forgot Password.');
       return;
     }
-
     try {
-      await ref
-          .read(authRepositoryProvider)
-          .sendPasswordResetEmail(email: email);
+      await ref.read(authRepositoryProvider).sendPasswordResetEmail(email: email);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -123,23 +116,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  // ── Error helper ───────────────────────────────────────────────────────────
-
   String _friendlyError(String raw) {
-    if (raw.contains('user-not-found'))
-      return 'No account found with this email.';
-    if (raw.contains('wrong-password'))
-      return 'Incorrect password. Please try again.';
-    if (raw.contains('invalid-email'))
-      return 'Please enter a valid email address.';
-    if (raw.contains('too-many-requests'))
-      return 'Too many attempts. Please wait a moment.';
-    if (raw.contains('network-request-failed'))
-      return 'No internet connection.';
+    if (raw.contains('user-not-found')) return 'No account found with this email.';
+    if (raw.contains('wrong-password')) return 'Incorrect password. Please try again.';
+    if (raw.contains('invalid-email')) return 'Please enter a valid email address.';
+    if (raw.contains('too-many-requests')) return 'Too many attempts. Please wait a moment.';
+    if (raw.contains('network-request-failed')) return 'No internet connection.';
     return 'Login failed. Please try again.';
   }
-
-  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -160,8 +144,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 60),
-
-                    // ── Logo ──────────────────────────────────────────
                     Center(
                       child: Container(
                         width: 72,
@@ -170,16 +152,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           color: cs.primaryContainer,
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: Icon(
-                          Icons.domain_rounded,
-                          size: 36,
-                          color: cs.primary,
-                        ),
+                        child: Icon(Icons.domain_rounded, size: 36, color: cs.primary),
                       ),
                     ),
-
                     const SizedBox(height: 28),
-
                     Center(
                       child: Text(
                         'Mang Projects',
@@ -187,9 +163,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ),
-
                     const SizedBox(height: 6),
-
                     Center(
                       child: Text(
                         'Sign in to your account',
@@ -198,16 +172,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 48),
-
-                    // ── Email ─────────────────────────────────────────
-                    Text(
-                      'Email',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    Text('Email',
+                      style: Theme.of(context).textTheme.labelLarge
+                          ?.copyWith(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _emailController,
@@ -215,26 +183,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       textInputAction: TextInputAction.next,
                       onChanged: (_) => setState(() => _errorMessage = null),
                       decoration: _inputDecoration(
-                        cs: cs,
-                        hint: 'you@example.com',
-                        icon: Icons.email_outlined,
-                      ),
+                        cs: cs, hint: 'you@example.com',
+                        icon: Icons.email_outlined),
                       validator: (v) {
                         if (v == null || v.isEmpty) return 'Email is required';
                         if (!v.contains('@')) return 'Enter a valid email';
                         return null;
                       },
                     ),
-
                     const SizedBox(height: 20),
-
-                    // ── Password ──────────────────────────────────────
-                    Text(
-                      'Password',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    Text('Password',
+                      style: Theme.of(context).textTheme.labelLarge
+                          ?.copyWith(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _passwordController,
@@ -243,8 +203,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onFieldSubmitted: (_) => _login(),
                       onChanged: (_) => setState(() => _errorMessage = null),
                       decoration: _inputDecoration(
-                        cs: cs,
-                        hint: '••••••••',
+                        cs: cs, hint: '••••••••',
                         icon: Icons.lock_outline_rounded,
                         suffix: IconButton(
                           icon: Icon(
@@ -254,19 +213,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             color: cs.onSurface.withOpacity(0.5),
                           ),
                           onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword,
-                          ),
+                              () => _obscurePassword = !_obscurePassword),
                         ),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty)
-                          return 'Password is required';
+                        if (v == null || v.isEmpty) return 'Password is required';
                         if (v.length < 6) return 'Minimum 6 characters';
                         return null;
                       },
                     ),
-
-                    // ── Forgot password ───────────────────────────────
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
@@ -274,43 +229,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         style: TextButton.styleFrom(
                           foregroundColor: cs.primary,
                           padding: const EdgeInsets.symmetric(
-                            vertical: 4,
-                            horizontal: 0,
-                          ),
+                              vertical: 4, horizontal: 0),
                         ),
                         child: const Text('Forgot Password?'),
                       ),
                     ),
-
                     const SizedBox(height: 8),
-
-                    // ── Error box ─────────────────────────────────────
                     if (_errorMessage != null) ...[
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
+                            horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
                           color: cs.errorContainer,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.error_outline_rounded,
-                              color: cs.error,
-                              size: 18,
-                            ),
+                            Icon(Icons.error_outline_rounded,
+                                color: cs.error, size: 18),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 _errorMessage!,
                                 style: TextStyle(
-                                  color: cs.onErrorContainer,
-                                  fontSize: 13,
-                                ),
+                                    color: cs.onErrorContainer, fontSize: 13),
                               ),
                             ),
                           ],
@@ -318,8 +261,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
-
-                    // ── Sign in button ────────────────────────────────
                     SizedBox(
                       width: double.infinity,
                       height: 52,
@@ -327,43 +268,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onPressed: _isLoading ? null : _login,
                         style: FilledButton.styleFrom(
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                              borderRadius: BorderRadius.circular(14)),
                         ),
                         child: _isLoading
                             ? const SizedBox(
-                                width: 22,
-                                height: 22,
+                                width: 22, height: 22,
                                 child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'Sign In',
+                                    strokeWidth: 2, color: Colors.white))
+                            : const Text('Sign In',
                                 style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                                    fontSize: 16, fontWeight: FontWeight.bold)),
                       ),
                     ),
-
                     const Spacer(),
-
-                    // ── Change Office ─────────────────────────────────
                     Center(
                       child: TextButton.icon(
                         onPressed: _changeOffice,
                         icon: Icon(Icons.swap_horiz_rounded,
-                            size: 16, color: cs.onSurface.withOpacity(0.4)),
-                        label: Text(
-                          'Change Office',
-                          style: TextStyle(
-                            color: cs.onSurface.withOpacity(0.4),
-                            fontSize: 13,
-                          ),
-                        ),
+                            size: 16,
+                            color: cs.onSurface.withOpacity(0.4)),
+                        label: Text('Change Office',
+                            style: TextStyle(
+                                color: cs.onSurface.withOpacity(0.4),
+                                fontSize: 13)),
                       ),
                     ),
                     const SizedBox(height: 24),

@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../../home/data/models/user_model.dart'; // للـ JobTitles class
+import '../../../home/data/models/user_model.dart';
 
 class EmployeeModel {
   final String uid;
@@ -11,9 +11,9 @@ class EmployeeModel {
   final String phone;
   final String address;
   final String role;
-  final bool adminFlag;        // ✅ جديد
+  final bool adminFlag;
   final String department;
-  final String jobTitle;       // key من JobTitles
+  final String jobTitle;
   final String specialization;
   final int graduationYear;
   final DateTime joinDate;
@@ -22,6 +22,7 @@ class EmployeeModel {
   final String notes;
   final bool isActive;
   final DateTime createdAt;
+  final String? linkedClientId;
 
   const EmployeeModel({
     required this.uid,
@@ -43,86 +44,97 @@ class EmployeeModel {
     required this.notes,
     required this.isActive,
     required this.createdAt,
+    this.linkedClientId,
   });
 
-  // ── Role helpers ───────────────────────────────────────────────────────────
-  bool get isAdmin      => adminFlag || role == 'admin';
-  bool get isEngineer   => role == 'engineer';
+  bool get isAdmin => adminFlag || role == 'admin';
+  bool get isEngineer => role == 'engineer';
   bool get isTeamLeader => role == 'team_leader';
-  bool get isReviewer   => role == 'reviewer';
-  bool get isClient     => role == 'client';
+  bool get isReviewer => role == 'reviewer';
+  bool get isClient => role == 'client';
 
-  // ── Labels ─────────────────────────────────────────────────────────────────
   String get jobTitleLabel => JobTitles.labelOf(jobTitle);
 
   String get statusLabel {
     switch (status) {
-      case 'active':    return 'Active';
-      case 'suspended': return 'Suspended';
-      case 'resigned':  return 'Resigned';
-      default:          return status;
+      case 'active':
+        return 'Active';
+      case 'suspended':
+        return 'Suspended';
+      case 'resigned':
+        return 'Resigned';
+      default:
+        return status;
     }
   }
 
   String get roleLabel {
     switch (role) {
-      case 'admin':        return 'Admin';
-      case 'team_leader':  return 'Team Leader';
-      case 'reviewer':     return 'Reviewer';
-      case 'engineer':     return 'Engineer';
-      case 'client':       return 'Client';
-      default:             return role;
+      case 'admin':
+        return 'Admin';
+      case 'team_leader':
+        return 'Team Leader';
+      case 'reviewer':
+        return 'Reviewer';
+      case 'engineer':
+        return 'Engineer';
+      case 'client':
+        return 'Client';
+      default:
+        return role;
     }
   }
 
   String get departmentLabel => department;
 
-  // ── Firestore ──────────────────────────────────────────────────────────────
   factory EmployeeModel.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return EmployeeModel(
-      uid:            d['uid'] ?? doc.id,
-      officeId:       d['officeId'] ?? '',
-      employeeCode:   d['employeeCode'] ?? '',
-      name:           d['name'] ?? '',
-      email:          d['email'] ?? '',
-      phone:          d['phone'] ?? '',
-      address:        d['address'] ?? '',
-      role:           d['role'] ?? 'engineer',
-      adminFlag:      d['adminFlag'] ?? (d['role'] == 'admin'),
-      department:     d['department'] ?? '',
-      jobTitle:       d['jobTitle'] ?? '',
+      uid: d['uid'] ?? doc.id,
+      officeId: d['officeId'] ?? '',
+      employeeCode: d['employeeCode'] ?? '',
+      name: d['name'] ?? '',
+      email: d['email'] ?? '',
+      phone: d['phone'] ?? '',
+      address: d['address'] ?? '',
+      role: d['role'] ?? 'engineer',
+      adminFlag: d['adminFlag'] ?? (d['role'] == 'admin'),
+      department: d['department'] ?? '',
+      jobTitle: d['jobTitle'] ?? '',
       specialization: d['specialization'] ?? '',
       graduationYear: d['graduationYear'] ?? 0,
-      joinDate:       (d['joinDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      status:         d['status'] ?? 'active',
-      rating:         (d['rating'] ?? 0).toDouble(),
-      notes:          d['notes'] ?? '',
-      isActive:       d['isActive'] ?? true,
-      createdAt:      (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      joinDate: (d['joinDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      status: d['status'] ?? 'active',
+      rating: (d['rating'] ?? 0).toDouble(),
+      notes: d['notes'] ?? '',
+      isActive: d['isActive'] ?? true,
+      createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      linkedClientId: d['linkedClientId'] as String?,
     );
   }
 
   Map<String, dynamic> toFirestore() => {
-    'uid':            uid,
-    'officeId':       officeId,
-    'employeeCode':   employeeCode,
-    'name':           name,
-    'email':          email,
-    'phone':          phone,
-    'address':        address,
-    'role':           role,
-    'adminFlag':      adminFlag,
-    'department':     department,
-    'jobTitle':       jobTitle,
+    'uid': uid,
+    'officeId': officeId,
+    'employeeCode': employeeCode,
+    'name': name,
+    'email': email,
+    'phone': phone,
+    'address': address,
+    'role': role,
+    'adminFlag': adminFlag,
+    'department': department,
+    'jobTitle': jobTitle,
     'specialization': specialization,
     'graduationYear': graduationYear,
-    'joinDate':       Timestamp.fromDate(joinDate),
-    'status':         status,
-    'rating':         rating,
-    'notes':          notes,
-    'isActive':       isActive,
-    'createdAt':      Timestamp.fromDate(createdAt),
+    'joinDate': Timestamp.fromDate(joinDate),
+    'status': status,
+    'rating': rating,
+    'notes': notes,
+    'isActive': isActive,
+    'createdAt': Timestamp.fromDate(createdAt),
+    if (linkedClientId != null && linkedClientId!.isNotEmpty)
+      'linkedClientId': linkedClientId,
   };
 
   EmployeeModel copyWith({
@@ -145,27 +157,29 @@ class EmployeeModel {
     String? notes,
     bool? isActive,
     DateTime? createdAt,
+    String? linkedClientId,
   }) {
     return EmployeeModel(
-      uid:            uid ?? this.uid,
-      officeId:       officeId ?? this.officeId,
-      employeeCode:   employeeCode ?? this.employeeCode,
-      name:           name ?? this.name,
-      email:          email ?? this.email,
-      phone:          phone ?? this.phone,
-      address:        address ?? this.address,
-      role:           role ?? this.role,
-      adminFlag:      adminFlag ?? this.adminFlag,
-      department:     department ?? this.department,
-      jobTitle:       jobTitle ?? this.jobTitle,
+      uid: uid ?? this.uid,
+      officeId: officeId ?? this.officeId,
+      employeeCode: employeeCode ?? this.employeeCode,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      address: address ?? this.address,
+      role: role ?? this.role,
+      adminFlag: adminFlag ?? this.adminFlag,
+      department: department ?? this.department,
+      jobTitle: jobTitle ?? this.jobTitle,
       specialization: specialization ?? this.specialization,
       graduationYear: graduationYear ?? this.graduationYear,
-      joinDate:       joinDate ?? this.joinDate,
-      status:         status ?? this.status,
-      rating:         rating ?? this.rating,
-      notes:          notes ?? this.notes,
-      isActive:       isActive ?? this.isActive,
-      createdAt:      createdAt ?? this.createdAt,
+      joinDate: joinDate ?? this.joinDate,
+      status: status ?? this.status,
+      rating: rating ?? this.rating,
+      notes: notes ?? this.notes,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      linkedClientId: linkedClientId ?? this.linkedClientId,
     );
   }
 }

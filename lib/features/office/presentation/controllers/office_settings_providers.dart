@@ -22,7 +22,7 @@ final officeSettingsProvider = StreamProvider<OfficeSettingsModel>((ref) {
           .watchSettings(user.officeId);
     },
     loading: () => const Stream.empty(),
-    error: (_, __) => const Stream.empty(),
+    error: (_, _) => const Stream.empty(),
   );
 });
 
@@ -33,7 +33,7 @@ final projectTypesProvider = Provider<List<String>>((ref) {
   return settingsAsync.when(
     data: (s) => s.projectTypes,
     loading: () => OfficeSettingsModel.defaults('').projectTypes,
-    error: (_, __) => OfficeSettingsModel.defaults('').projectTypes,
+    error: (_, _) => OfficeSettingsModel.defaults('').projectTypes,
   );
 });
 
@@ -42,7 +42,7 @@ final disciplinesProvider = Provider<List<String>>((ref) {
   return settingsAsync.when(
     data: (s) => s.disciplines,
     loading: () => OfficeSettingsModel.defaults('').disciplines,
-    error: (_, __) => OfficeSettingsModel.defaults('').disciplines,
+    error: (_, _) => OfficeSettingsModel.defaults('').disciplines,
   );
 });
 
@@ -51,7 +51,7 @@ final taskCategoriesProvider = Provider<List<String>>((ref) {
   return settingsAsync.when(
     data: (s) => s.taskCategories,
     loading: () => OfficeSettingsModel.defaults('').taskCategories,
-    error: (_, __) => OfficeSettingsModel.defaults('').taskCategories,
+    error: (_, _) => OfficeSettingsModel.defaults('').taskCategories,
   );
 });
 
@@ -60,6 +60,6 @@ final departmentsProvider = Provider<List<String>>((ref) {
   return settingsAsync.when(
     data: (s) => s.departments,
     loading: () => OfficeSettingsModel.defaults('').departments,
-    error: (_, __) => OfficeSettingsModel.defaults('').departments,
+    error: (_, _) => OfficeSettingsModel.defaults('').departments,
   );
 });

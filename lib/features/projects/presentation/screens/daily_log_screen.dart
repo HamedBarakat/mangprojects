@@ -105,9 +105,9 @@ class _DailyLogScreenState extends ConsumerState<DailyLogScreen> {
               final activeTasks = tasks
                   .where(
                     (t) =>
-                        t.status == 'in_progress' ||
                         t.status == 'not_started' ||
-                        t.status == 'under_review',
+                        t.status == 'in_progress' ||
+                        t.status == 'team_leader_review',
                   )
                   .toList();
 
@@ -127,7 +127,7 @@ class _DailyLogScreenState extends ConsumerState<DailyLogScreen> {
                         : ListView.separated(
                             padding: const EdgeInsets.all(16),
                             itemCount: activeTasks.length,
-                            separatorBuilder: (_, __) =>
+                            separatorBuilder: (_, _) =>
                                 const SizedBox(height: 10),
                             itemBuilder: (_, i) => _TaskHoursTile(
                               task: activeTasks[i],

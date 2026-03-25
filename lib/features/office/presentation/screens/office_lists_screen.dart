@@ -25,10 +25,8 @@ class OfficeListsScreen extends ConsumerWidget {
         ),
       ),
       body: settingsAsync.when(
-        loading: () =>
-            const Center(child: CircularProgressIndicator()),
-        error: (_, __) =>
-            const Center(child: Text('Error loading settings')),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, _) => const Center(child: Text('Error loading settings')),
         data: (settings) => ListView(
           padding: const EdgeInsets.all(20),
           children: [
@@ -139,13 +137,16 @@ class _ListSection extends ConsumerWidget {
                       Text(
                         title,
                         style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 15),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
                       ),
                       Text(
                         '${items.length} items',
                         style: TextStyle(
-                            color: cs.onSurface.withOpacity(0.5),
-                            fontSize: 12),
+                          color: cs.onSurface.withOpacity(0.5),
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -168,7 +169,9 @@ class _ListSection extends ConsumerWidget {
               child: Text(
                 'No items yet — tap + to add',
                 style: TextStyle(
-                    color: cs.onSurface.withOpacity(0.4), fontSize: 13),
+                  color: cs.onSurface.withOpacity(0.4),
+                  fontSize: 13,
+                ),
                 textAlign: TextAlign.center,
               ),
             )
@@ -204,14 +207,14 @@ class _ListSection extends ConsumerWidget {
           textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
             hintText: 'Enter item name',
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: const Text('Add'),
@@ -224,22 +227,23 @@ class _ListSection extends ConsumerWidget {
       // Check duplicate
       if (items.map((e) => e.toLowerCase()).contains(result.toLowerCase())) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('"$result" already exists')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('"$result" already exists')));
         }
         return;
       }
-      await ref.read(officeSettingsRepositoryProvider).addItem(
-            officeId: officeId,
-            field: field,
-            item: result,
-          );
+      await ref
+          .read(officeSettingsRepositoryProvider)
+          .addItem(officeId: officeId, field: field, item: result);
     }
   }
 
   Future<void> _showEditDialog(
-      BuildContext context, WidgetRef ref, String oldItem) async {
+    BuildContext context,
+    WidgetRef ref,
+    String oldItem,
+  ) async {
     final controller = TextEditingController(text: oldItem);
     final result = await showDialog<String>(
       context: context,
@@ -250,14 +254,14 @@ class _ListSection extends ConsumerWidget {
           autofocus: true,
           textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: const Text('Save'),
@@ -267,7 +271,9 @@ class _ListSection extends ConsumerWidget {
     );
 
     if (result != null && result.isNotEmpty && result != oldItem) {
-      await ref.read(officeSettingsRepositoryProvider).renameItem(
+      await ref
+          .read(officeSettingsRepositoryProvider)
+          .renameItem(
             officeId: officeId,
             field: field,
             oldItem: oldItem,
@@ -278,7 +284,10 @@ class _ListSection extends ConsumerWidget {
   }
 
   Future<void> _deleteItem(
-      BuildContext context, WidgetRef ref, String item) async {
+    BuildContext context,
+    WidgetRef ref,
+    String item,
+  ) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -286,8 +295,9 @@ class _ListSection extends ConsumerWidget {
         content: Text('Delete "$item" from $title?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
@@ -298,11 +308,9 @@ class _ListSection extends ConsumerWidget {
     );
 
     if (confirm == true) {
-      await ref.read(officeSettingsRepositoryProvider).removeItem(
-            officeId: officeId,
-            field: field,
-            item: item,
-          );
+      await ref
+          .read(officeSettingsRepositoryProvider)
+          .removeItem(officeId: officeId, field: field, item: item);
     }
   }
 
@@ -311,11 +319,9 @@ class _ListSection extends ConsumerWidget {
     if (newIndex > oldIndex) newIndex--;
     final item = updated.removeAt(oldIndex);
     updated.insert(newIndex, item);
-    await ref.read(officeSettingsRepositoryProvider).updateList(
-          officeId: officeId,
-          field: field,
-          items: updated,
-        );
+    await ref
+        .read(officeSettingsRepositoryProvider)
+        .updateList(officeId: officeId, field: field, items: updated);
   }
 }
 
@@ -340,32 +346,33 @@ class _ItemTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return ListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       leading: Container(
         width: 8,
         height: 8,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
       title: Text(item, style: const TextStyle(fontSize: 14)),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: Icon(Icons.edit_outlined,
-                size: 18, color: cs.onSurface.withOpacity(0.5)),
+            icon: Icon(
+              Icons.edit_outlined,
+              size: 18,
+              color: cs.onSurface.withOpacity(0.5),
+            ),
             onPressed: onEdit,
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline_rounded,
-                size: 18, color: Colors.red),
+            icon: const Icon(
+              Icons.delete_outline_rounded,
+              size: 18,
+              color: Colors.red,
+            ),
             onPressed: onDelete,
           ),
-          Icon(Icons.drag_handle_rounded,
-              color: cs.onSurface.withOpacity(0.3)),
+          Icon(Icons.drag_handle_rounded, color: cs.onSurface.withOpacity(0.3)),
         ],
       ),
     );

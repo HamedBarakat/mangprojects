@@ -6,18 +6,8 @@ import '../../data/models/project_model.dart';
 import '../controllers/project_providers.dart';
 import '../../../../features/home/presentation/controllers/home_providers.dart';
 import '../../../../features/office/presentation/controllers/office_settings_providers.dart';
-
-// ── Clients provider ──────────────────────────────────────────────────────────
-final _clientUsersProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
-  (ref, officeId) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .where('officeId', isEqualTo: officeId)
-        .where('role', isEqualTo: 'client')
-        .get();
-    return snap.docs.map((d) => {'uid': d.id, ...d.data()}).toList();
-  },
-);
+import '../../../../features/client/data/providers/client_providers.dart';
+import '../../../../features/employees/presentation/controllers/employee_providers.dart';
 
 class AddEditProjectScreen extends ConsumerStatefulWidget {
   final ProjectModel? project;
@@ -50,6 +40,18 @@ class _AddEditProjectScreenState extends ConsumerState<AddEditProjectScreen> {
   String _selectedClientId = '';
   String _selectedClientName = '';
 
+  // ── Client Contact selection ──────────────────────────────────────────────
+  String? _selectedClientContactId;
+  String? _selectedClientContactName;
+
+  // ── Project Team ──────────────────────────────────────────────────────────
+  String? _selectedTeamLeaderId;
+  String? _selectedTeamLeaderName;
+  String? _selectedQcId;
+  String? _selectedQcName;
+  String? _selectedPmId;
+  String? _selectedPmName;
+
   bool get _isEditing => widget.project != null;
 
   @override
@@ -68,8 +70,27 @@ class _AddEditProjectScreenState extends ConsumerState<AddEditProjectScreen> {
       _startDate = p.startDate;
       _endDate = p.endDate;
       _selectedDisciplines.addAll(p.disciplines);
-      _selectedClientId   = p.clientId;
+      _selectedClientId = p.clientId;
       _selectedClientName = p.clientName;
+      _selectedClientContactId = p.clientContactId;
+      _selectedClientContactName = p.clientContactName;
+      _selectedTeamLeaderId = p.teamLeaderId;
+      _selectedTeamLeaderName = p.teamLeaderName;
+      _selectedQcId = p.qcId;
+      _selectedQcName = p.qcName;
+      _selectedPmId = p.pmId;
+      _selectedPmName = p.pmName;
+    } else {
+      // تحميل الكود مباشرة من Firestore بدون cache
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final user = ref.read(currentUserProvider).value;
+        if (user == null) return;
+        final repo = ref.read(projectRepositoryProvider);
+        final code = await repo.generateProjectCode(user.officeId);
+        if (mounted && _projectCodeController.text.isEmpty) {
+          setState(() => _projectCodeController.text = code);
+        }
+      });
     }
   }
 
@@ -103,10 +124,18 @@ class _AddEditProjectScreenState extends ConsumerState<AddEditProjectScreen> {
       if (_isEditing) {
         await repo.updateProject(widget.project!.id, {
           'name': _nameController.text.trim(),
-          'clientId':   _selectedClientId,
+          'clientId': _selectedClientId,
           'clientName': _selectedClientName.isNotEmpty
               ? _selectedClientName
               : _clientNameController.text.trim(),
+          'clientContactId': _selectedClientContactId,
+          'clientContactName': _selectedClientContactName,
+          'teamLeaderId': _selectedTeamLeaderId,
+          'teamLeaderName': _selectedTeamLeaderName,
+          'qcId': _selectedQcId,
+          'qcName': _selectedQcName,
+          'pmId': _selectedPmId,
+          'pmName': _selectedPmName,
           'location': _locationController.text.trim(),
           'type': _type,
           'status': _status,
@@ -122,10 +151,18 @@ class _AddEditProjectScreenState extends ConsumerState<AddEditProjectScreen> {
           'name': _nameController.text.trim(),
           'type': _type,
           'status': _status,
-          'clientId':   _selectedClientId,
+          'clientId': _selectedClientId,
           'clientName': _selectedClientName.isNotEmpty
               ? _selectedClientName
               : _clientNameController.text.trim(),
+          'clientContactId': _selectedClientContactId,
+          'clientContactName': _selectedClientContactName,
+          'teamLeaderId': _selectedTeamLeaderId,
+          'teamLeaderName': _selectedTeamLeaderName,
+          'qcId': _selectedQcId,
+          'qcName': _selectedQcName,
+          'pmId': _selectedPmId,
+          'pmName': _selectedPmName,
           'location': _locationController.text.trim(),
           'disciplines': _selectedDisciplines,
           'startDate': Timestamp.fromDate(_startDate),
@@ -152,14 +189,6 @@ class _AddEditProjectScreenState extends ConsumerState<AddEditProjectScreen> {
     final cs = Theme.of(context).colorScheme;
     final disciplines = ref.watch(disciplinesProvider);
     final projectTypes = ref.watch(projectTypesProvider);
-
-    if (!_isEditing && _projectCodeController.text.isEmpty) {
-      ref.watch(projectCodeProvider).whenData((code) {
-        if (_projectCodeController.text.isEmpty) {
-          _projectCodeController.text = code;
-        }
-      });
-    }
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -215,14 +244,22 @@ class _AddEditProjectScreenState extends ConsumerState<AddEditProjectScreen> {
 
             // ── Client Dropdown ───────────────────────────────────────
             _ClientDropdown(
-              officeId: ref.read(currentUserProvider).value?.officeId ?? '',
-              selectedClientId:   _selectedClientId,
+              selectedClientId: _selectedClientId,
               selectedClientName: _selectedClientName,
+              selectedContactId: _selectedClientContactId,
+              selectedContactName: _selectedClientContactName,
               fallbackController: _clientNameController,
               onChanged: (id, name) => setState(() {
-                _selectedClientId   = id;
+                _selectedClientId = id;
                 _selectedClientName = name;
                 _clientNameController.text = name;
+                // reset contact عند تغيير الـ client
+                _selectedClientContactId = null;
+                _selectedClientContactName = null;
+              }),
+              onContactChanged: (contactId, contactName) => setState(() {
+                _selectedClientContactId = contactId;
+                _selectedClientContactName = contactName;
               }),
             ),
             const SizedBox(height: 12),
@@ -240,7 +277,7 @@ class _AddEditProjectScreenState extends ConsumerState<AddEditProjectScreen> {
 
             // Project Type — dynamic من office settings
             DropdownButtonFormField<String>(
-              value: projectTypes.contains(_type) ? _type : null,
+              initialValue: projectTypes.contains(_type) ? _type : null,
               decoration: InputDecoration(
                 labelText: 'Project Type',
                 prefixIcon: Icon(Icons.category_outlined, color: cs.primary),
@@ -381,6 +418,36 @@ class _AddEditProjectScreenState extends ConsumerState<AddEditProjectScreen> {
                   ),
             const SizedBox(height: 24),
 
+            // ── Project Team ──────────────────────────────────────────
+            _SectionTitle(title: 'Project Team'),
+            const SizedBox(height: 4),
+            Text(
+              'These will be the default team for all tasks in this project',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _ProjectTeamDropdowns(
+              selectedTeamLeaderId: _selectedTeamLeaderId,
+              selectedQcId: _selectedQcId,
+              selectedPmId: _selectedPmId,
+              onTeamLeaderChanged: (id, name) => setState(() {
+                _selectedTeamLeaderId = id?.isEmpty == true ? null : id;
+                _selectedTeamLeaderName = name?.isEmpty == true ? null : name;
+              }),
+              onQcChanged: (id, name) => setState(() {
+                _selectedQcId = id?.isEmpty == true ? null : id;
+                _selectedQcName = name?.isEmpty == true ? null : name;
+              }),
+              onPmChanged: (id, name) => setState(() {
+                _selectedPmId = id?.isEmpty == true ? null : id;
+                _selectedPmName = name?.isEmpty == true ? null : name;
+              }),
+            ),
+            const SizedBox(height: 24),
+
             // ── Notes ─────────────────────────────────────────────────
             _SectionTitle(title: 'Notes'),
             const SizedBox(height: 12),
@@ -479,7 +546,7 @@ class _AddEditProjectScreenState extends ConsumerState<AddEditProjectScreen> {
   }) {
     final cs = Theme.of(context).colorScheme;
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
@@ -602,86 +669,170 @@ class _DateField extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// CLIENT DROPDOWN WIDGET
+// CLIENT DROPDOWN WIDGET  (من clients collection)
 // ══════════════════════════════════════════════════════════════════════════════
 
 class _ClientDropdown extends ConsumerWidget {
-  final String officeId;
   final String selectedClientId;
   final String selectedClientName;
+  final String? selectedContactId;
+  final String? selectedContactName;
   final TextEditingController fallbackController;
   final void Function(String id, String name) onChanged;
+  final void Function(String? contactId, String? contactName) onContactChanged;
 
   const _ClientDropdown({
-    required this.officeId,
     required this.selectedClientId,
     required this.selectedClientName,
+    this.selectedContactId,
+    this.selectedContactName,
     required this.fallbackController,
     required this.onChanged,
+    required this.onContactChanged,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
-    final clientsAsync = ref.watch(_clientUsersProvider(officeId));
+    final clientsAsync = ref.watch(clientsStreamProvider);
 
     return clientsAsync.when(
-      loading: () => _buildFallback(context, cs),
-      error: (_, __) => _buildFallback(context, cs),
+      loading: () => const LinearProgressIndicator(),
+      error: (_, _) => _buildFallback(context, cs),
       data: (clients) {
-        // لو مفيش clients → text field عادي
-        if (clients.isEmpty) return _buildFallback(context, cs);
+        final activeClients = clients.where((c) => c.isActive).toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
 
-        // قيمة محددة — نتأكد إنها موجودة في الـ list
-        final validId = clients.any((c) => c['uid'] == selectedClientId)
+        if (activeClients.isEmpty) return _buildFallback(context, cs);
+
+        final validClientId = activeClients.any((c) => c.id == selectedClientId)
             ? selectedClientId
+            : null;
+
+        // الـ client المختار — لجلب الـ contacts
+        final selectedClient = validClientId != null
+            ? activeClients.firstWhere((c) => c.id == validClientId)
             : null;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Dropdown من الـ clients المسجلين
+            // ── Client Dropdown ──────────────────────────────────────
             DropdownButtonFormField<String>(
-              value: validId,
+              initialValue: validClientId,
               decoration: InputDecoration(
                 labelText: 'Client',
-                prefixIcon: const Icon(Icons.person_outline_rounded),
+                prefixIcon: Icon(Icons.business_outlined, color: cs.primary),
                 filled: true,
                 fillColor: cs.surfaceContainerHighest,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: cs.primary, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
               ),
               hint: const Text('Select Client'),
+              borderRadius: BorderRadius.circular(14),
               items: [
-                // خيار فاضي
                 const DropdownMenuItem(value: '', child: Text('— No Client —')),
-                ...clients.map((c) => DropdownMenuItem(
-                  value: c['uid'] as String,
-                  child: Text(c['name'] as String? ?? c['uid']),
-                )),
+                ...activeClients.map(
+                  (c) => DropdownMenuItem(value: c.id, child: Text(c.name)),
+                ),
               ],
-              onChanged: (uid) {
-                if (uid == null || uid.isEmpty) {
+              onChanged: (id) {
+                if (id == null || id.isEmpty) {
                   onChanged('', '');
+                  onContactChanged(null, null);
                 } else {
-                  final client = clients.firstWhere((c) => c['uid'] == uid);
-                  onChanged(uid, client['name'] as String? ?? '');
+                  final client = activeClients.firstWhere((c) => c.id == id);
+                  onChanged(id, client.name);
+                  onContactChanged(null, null);
                 }
               },
             ),
-            // لو اختار client بيظهر اسمه
+
+            // ── Contact Dropdown — يظهر لو في contacts ──────────────
+            if (selectedClient != null &&
+                selectedClient.contacts.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue:
+                    selectedClient.contacts.any(
+                      (c) => c.id == selectedContactId,
+                    )
+                    ? selectedContactId
+                    : null,
+                decoration: InputDecoration(
+                  labelText: 'Client Contact',
+                  prefixIcon: Icon(
+                    Icons.person_outline_rounded,
+                    color: cs.primary,
+                  ),
+                  filled: true,
+                  fillColor: cs.surfaceContainerHighest,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: cs.primary, width: 2),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                ),
+                hint: const Text('Select Contact (Optional)'),
+                borderRadius: BorderRadius.circular(14),
+                items: [
+                  const DropdownMenuItem(
+                    value: '',
+                    child: Text('— No Contact —'),
+                  ),
+                  ...selectedClient.contacts.map(
+                    (contact) => DropdownMenuItem(
+                      value: contact.id,
+                      child: Text('${contact.name} · ${contact.role}'),
+                    ),
+                  ),
+                ],
+                onChanged: (contactId) {
+                  if (contactId == null || contactId.isEmpty) {
+                    onContactChanged(null, null);
+                  } else {
+                    final contact = selectedClient.contacts.firstWhere(
+                      (c) => c.id == contactId,
+                    );
+                    onContactChanged(contact.id, contact.name);
+                  }
+                },
+              ),
+            ],
+
+            // ── Linked badge ─────────────────────────────────────────
             if (selectedClientId.isNotEmpty) ...[
               const SizedBox(height: 6),
-              Row(children: [
-                const SizedBox(width: 4),
-                Icon(Icons.check_circle_outline, size: 14, color: cs.primary),
-                const SizedBox(width: 4),
-                Text('Linked to client account',
-                    style: TextStyle(fontSize: 11, color: cs.primary)),
-              ]),
+              Row(
+                children: [
+                  const SizedBox(width: 4),
+                  Icon(Icons.check_circle_outline, size: 14, color: cs.primary),
+                  const SizedBox(width: 4),
+                  Text(
+                    selectedContactName != null
+                        ? 'Contact: $selectedContactName'
+                        : 'Linked to client account',
+                    style: TextStyle(fontSize: 11, color: cs.primary),
+                  ),
+                ],
+              ),
             ],
           ],
         );
@@ -702,8 +853,194 @@ class _ClientDropdown extends ConsumerWidget {
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
     );
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PROJECT TEAM DROPDOWNS  (Team Leader / QC / PM)
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _ProjectTeamDropdowns extends ConsumerWidget {
+  final String? selectedTeamLeaderId;
+  final String? selectedQcId;
+  final String? selectedPmId;
+  final void Function(String? id, String? name) onTeamLeaderChanged;
+  final void Function(String? id, String? name) onQcChanged;
+  final void Function(String? id, String? name) onPmChanged;
+
+  const _ProjectTeamDropdowns({
+    required this.selectedTeamLeaderId,
+    required this.selectedQcId,
+    required this.selectedPmId,
+    required this.onTeamLeaderChanged,
+    required this.onQcChanged,
+    required this.onPmChanged,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final employeesAsync = ref.watch(employeesProvider);
+
+    return employeesAsync.when(
+      loading: () => const LinearProgressIndicator(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (employees) {
+        final active = employees.where((e) => e.isActive).toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
+
+        // Team Leaders = admin + team_leader
+        final teamLeaders =
+            active.where((e) => e.isTeamLeader || e.isAdmin).toList();
+
+        // QC = reviewer
+        final reviewers = active.where((e) => e.isReviewer).toList();
+
+        // PM = everyone active (المدير ممكن يكون أي موظف)
+        final allStaff = active
+            .where((e) => !e.isClient)
+            .toList();
+
+        InputDecoration _dec(String label, IconData icon) => InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, color: cs.primary),
+          filled: true,
+          fillColor: cs.surfaceContainerHighest,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: cs.primary, width: 2),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+        );
+
+        final noneItem = <DropdownMenuItem<String>>[
+          const DropdownMenuItem(value: '', child: Text('— Not Assigned —')),
+        ];
+
+        return Column(
+          children: [
+            // ── Team Leader ───────────────────────────────────────────
+            DropdownButtonFormField<String>(
+              initialValue: teamLeaders.any((e) => e.uid == selectedTeamLeaderId)
+                  ? selectedTeamLeaderId
+                  : '',
+              decoration: _dec('Team Leader', Icons.manage_accounts_outlined),
+              borderRadius: BorderRadius.circular(14),
+              hint: const Text('Select Team Leader'),
+              items: [
+                ...noneItem,
+                ...teamLeaders.map(
+                  (e) => DropdownMenuItem(
+                    value: e.uid,
+                    child: Text(e.name),
+                  ),
+                ),
+              ],
+              onChanged: (id) {
+                if (id == null || id.isEmpty) {
+                  onTeamLeaderChanged(null, null);
+                } else {
+                  final emp = teamLeaders.firstWhere((e) => e.uid == id);
+                  onTeamLeaderChanged(id, emp.name);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+
+            // ── QC Reviewer ───────────────────────────────────────────
+            DropdownButtonFormField<String>(
+              initialValue: reviewers.any((e) => e.uid == selectedQcId)
+                  ? selectedQcId
+                  : '',
+              decoration: _dec('QC Reviewer', Icons.verified_outlined),
+              borderRadius: BorderRadius.circular(14),
+              hint: const Text('Select QC Reviewer'),
+              items: [
+                ...noneItem,
+                ...reviewers.map(
+                  (e) => DropdownMenuItem(
+                    value: e.uid,
+                    child: Text(e.name),
+                  ),
+                ),
+              ],
+              onChanged: (id) {
+                if (id == null || id.isEmpty) {
+                  onQcChanged(null, null);
+                } else {
+                  final emp = reviewers.firstWhere((e) => e.uid == id);
+                  onQcChanged(id, emp.name);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+
+            // ── PM ────────────────────────────────────────────────────
+            DropdownButtonFormField<String>(
+              initialValue:
+                  allStaff.any((e) => e.uid == selectedPmId) ? selectedPmId : '',
+              decoration: _dec('Project Manager (PM)', Icons.badge_outlined),
+              borderRadius: BorderRadius.circular(14),
+              hint: const Text('Select Project Manager'),
+              items: [
+                ...noneItem,
+                ...allStaff.map(
+                  (e) => DropdownMenuItem(
+                    value: e.uid,
+                    child: Text(e.name),
+                  ),
+                ),
+              ],
+              onChanged: (id) {
+                if (id == null || id.isEmpty) {
+                  onPmChanged(null, null);
+                } else {
+                  final emp = allStaff.firstWhere((e) => e.uid == id);
+                  onPmChanged(id, emp.name);
+                }
+              },
+            ),
+
+            // ── Summary badge ─────────────────────────────────────────
+            if (selectedTeamLeaderId != null ||
+                selectedQcId != null ||
+                selectedPmId != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.group_outlined, size: 14, color: cs.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Project team assigned — QC will be auto-filled on new tasks',
+                      style: TextStyle(fontSize: 11, color: cs.primary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+

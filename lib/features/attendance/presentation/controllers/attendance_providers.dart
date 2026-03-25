@@ -15,13 +15,12 @@ final todayRecordProvider = StreamProvider<AttendanceModel?>((ref) {
   return userAsync.when(
     data: (user) {
       if (user == null) return const Stream.empty();
-      return ref.watch(attendanceRepositoryProvider).watchTodayRecord(
-            officeId: user.officeId,
-            employeeId: user.uid,
-          );
+      return ref
+          .watch(attendanceRepositoryProvider)
+          .watchTodayRecord(officeId: user.officeId, employeeId: user.uid);
     },
     loading: () => const Stream.empty(),
-    error: (_, __) => const Stream.empty(),
+    error: (_, _) => const Stream.empty(),
   );
 });
 
@@ -31,7 +30,7 @@ final isCheckedInProvider = Provider<bool>((ref) {
   return todayAsync.when(
     data: (record) => record != null,
     loading: () => false,
-    error: (_, __) => false,
+    error: (_, _) => false,
   );
 });
 
@@ -41,7 +40,7 @@ final isCheckedOutProvider = Provider<bool>((ref) {
   return todayAsync.when(
     data: (record) => record?.isCheckedOut ?? false,
     loading: () => false,
-    error: (_, __) => false,
+    error: (_, _) => false,
   );
 });
 
@@ -56,7 +55,7 @@ final todayAllAttendanceProvider = StreamProvider<List<AttendanceModel>>((ref) {
           .watchTodayAll(user.officeId);
     },
     loading: () => const Stream.empty(),
-    error: (_, __) => const Stream.empty(),
+    error: (_, _) => const Stream.empty(),
   );
 });
 
@@ -74,7 +73,9 @@ final myMonthlyRecordsProvider = StreamProvider<List<AttendanceModel>>((ref) {
   return userAsync.when(
     data: (user) {
       if (user == null) return const Stream.empty();
-      return ref.watch(attendanceRepositoryProvider).watchMonthlyRecords(
+      return ref
+          .watch(attendanceRepositoryProvider)
+          .watchMonthlyRecords(
             officeId: user.officeId,
             employeeId: user.uid,
             year: selectedMonth.year,
@@ -82,7 +83,7 @@ final myMonthlyRecordsProvider = StreamProvider<List<AttendanceModel>>((ref) {
           );
     },
     loading: () => const Stream.empty(),
-    error: (_, __) => const Stream.empty(),
+    error: (_, _) => const Stream.empty(),
   );
 });
 
@@ -94,7 +95,9 @@ final myMonthlyStatsProvider = FutureProvider<Map<String, int>>((ref) async {
   return userAsync.when(
     data: (user) async {
       if (user == null) return {'present': 0, 'late': 0, 'absent': 0};
-      return await ref.watch(attendanceRepositoryProvider).getMonthlyStats(
+      return await ref
+          .watch(attendanceRepositoryProvider)
+          .getMonthlyStats(
             officeId: user.officeId,
             employeeId: user.uid,
             year: selectedMonth.year,
@@ -102,13 +105,14 @@ final myMonthlyStatsProvider = FutureProvider<Map<String, int>>((ref) async {
           );
     },
     loading: () async => {'present': 0, 'late': 0, 'absent': 0},
-    error: (_, __) async => {'present': 0, 'late': 0, 'absent': 0},
+    error: (_, _) async => {'present': 0, 'late': 0, 'absent': 0},
   );
 });
 
 // ── Pending overtime requests (Admin) ────────────────────────────────────────
-final pendingOvertimeProvider =
-    StreamProvider<List<Map<String, dynamic>>>((ref) {
+final pendingOvertimeProvider = StreamProvider<List<Map<String, dynamic>>>((
+  ref,
+) {
   final userAsync = ref.watch(currentUserProvider);
   return userAsync.when(
     data: (user) {
@@ -118,7 +122,7 @@ final pendingOvertimeProvider =
           .watchPendingOvertimeRequests(user.officeId);
     },
     loading: () => const Stream.empty(),
-    error: (_, __) => const Stream.empty(),
+    error: (_, _) => const Stream.empty(),
   );
 });
 
@@ -128,6 +132,6 @@ final pendingOvertimeCountProvider = Provider<int>((ref) {
   return pendingAsync.when(
     data: (list) => list.length,
     loading: () => 0,
-    error: (_, __) => 0,
+    error: (_, _) => 0,
   );
 });

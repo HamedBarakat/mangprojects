@@ -1,32 +1,45 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'models/employee_model.dart';
-import 'package:firebase_core/firebase_core.dart';
 
 class EmployeeRepository {
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  // ── Get all employees for an office ──────────────────────────────────────
   Stream<List<EmployeeModel>> watchEmployees(String officeId) {
     return _db
         .collection('users')
         .where('officeId', isEqualTo: officeId)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => EmployeeModel.fromFirestore(doc))
-            .toList());
+        .map(
+          (snap) => snap.docs
+              .map((doc) => EmployeeModel.fromFirestore(doc))
+              .where((e) => e.role != 'client')
+              .toList(),
+        );
   }
 
-  // ── Get single employee ───────────────────────────────────────────────────
+  Stream<List<EmployeeModel>> watchClientAccounts(String officeId) {
+    return _db
+        .collection('users')
+        .where('officeId', isEqualTo: officeId)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => EmployeeModel.fromFirestore(doc))
+              .where((e) => e.role == 'client')
+              .toList(),
+        );
+  }
+
   Future<EmployeeModel?> getEmployee(String uid) async {
     final doc = await _db.collection('users').doc(uid).get();
     if (!doc.exists) return null;
     return EmployeeModel.fromFirestore(doc);
   }
 
-  // ── Add employee ──────────────────────────────────────────────────────────
   Future<void> addEmployee({
     required String officeId,
     required String email,
@@ -43,9 +56,11 @@ class EmployeeRepository {
     required int graduationYear,
     required DateTime joinDate,
     required String notes,
+    String? linkedClientId,
   }) async {
+    final appName = 'secondaryApp_${DateTime.now().millisecondsSinceEpoch}';
     final secondaryApp = await Firebase.initializeApp(
-      name: 'secondaryApp',
+      name: appName,
       options: Firebase.app().options,
     );
 
@@ -60,25 +75,27 @@ class EmployeeRepository {
       final uid = credential.user!.uid;
 
       await _db.collection('users').doc(uid).set({
-        'uid':            uid,
-        'officeId':       officeId,
-        'employeeCode':   employeeCode,
-        'name':           name,
-        'email':          email,
-        'phone':          phone,
-        'address':        address,
-        'role':           role,
-        'adminFlag':      adminFlag,
-        'department':     department,
-        'jobTitle':       jobTitle,
+        'uid': uid,
+        'officeId': officeId,
+        'employeeCode': employeeCode,
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'address': address,
+        'role': role,
+        'adminFlag': adminFlag,
+        'department': department,
+        'jobTitle': jobTitle,
         'specialization': specialization,
         'graduationYear': graduationYear,
-        'joinDate':       Timestamp.fromDate(joinDate),
-        'status':         'active',
-        'rating':         0.0,
-        'notes':          notes,
-        'isActive':       true,
-        'createdAt':      FieldValue.serverTimestamp(),
+        'joinDate': Timestamp.fromDate(joinDate),
+        'status': 'active',
+        'rating': 0.0,
+        'notes': notes,
+        'isActive': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        if (linkedClientId != null && linkedClientId.isNotEmpty)
+          'linkedClientId': linkedClientId,
       });
 
       await secondaryAuth.signOut();
@@ -87,31 +104,35 @@ class EmployeeRepository {
     }
   }
 
-  // ── Update employee ───────────────────────────────────────────────────────
   Future<void> updateEmployee(String uid, Map<String, dynamic> data) async {
     await _db.collection('users').doc(uid).update(data);
   }
 
-  // ── Toggle employee status ────────────────────────────────────────────────
   Future<void> toggleStatus(String uid, String newStatus) async {
     await _db.collection('users').doc(uid).update({
-      'status':   newStatus,
+      'status': newStatus,
       'isActive': newStatus == 'active',
     });
   }
 
-  // ── Update rating ─────────────────────────────────────────────────────────
   Future<void> updateRating(String uid, double rating) async {
     await _db.collection('users').doc(uid).update({'rating': rating});
   }
 
-  // ── Generate next employee code ───────────────────────────────────────────
   Future<String> generateEmployeeCode(String officeId) async {
     final snap = await _db
         .collection('users')
         .where('officeId', isEqualTo: officeId)
         .get();
-    final count = snap.docs.length + 1;
-    return 'EMP${count.toString().padLeft(3, '0')}';
+
+    int maxNum = 0;
+    for (final doc in snap.docs) {
+      final code = doc.data()['employeeCode'] as String? ?? '';
+      if (code.startsWith('EMP')) {
+        final num = int.tryParse(code.substring(3)) ?? 0;
+        if (num > maxNum) maxNum = num;
+      }
+    }
+    return 'EMP${(maxNum + 1).toString().padLeft(3, '0')}';
   }
 }

@@ -43,7 +43,7 @@ class OfficeWelcomeScreen extends ConsumerWidget {
                         child: Image.network(
                           office.logo,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
+                          errorBuilder: (_, _, _) =>
                               _OfficeLetter(name: office.name, cs: cs),
                         ),
                       )
@@ -56,8 +56,8 @@ class OfficeWelcomeScreen extends ConsumerWidget {
               Text(
                 'Welcome to',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white.withOpacity(0.8),
-                    ),
+                  color: Colors.white.withOpacity(0.8),
+                ),
               ),
 
               const SizedBox(height: 8),
@@ -66,16 +66,18 @@ class OfficeWelcomeScreen extends ConsumerWidget {
                 office.name,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
 
               const SizedBox(height: 12),
 
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 6),
+                  horizontal: 16,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
@@ -96,9 +98,9 @@ class OfficeWelcomeScreen extends ConsumerWidget {
                 'You are now connected to your office.\nSign in to continue.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withOpacity(0.75),
-                      height: 1.6,
-                    ),
+                  color: Colors.white.withOpacity(0.75),
+                  height: 1.6,
+                ),
               ),
 
               const Spacer(flex: 2),
@@ -113,12 +115,12 @@ class OfficeWelcomeScreen extends ConsumerWidget {
                     backgroundColor: Colors.white,
                     foregroundColor: cs.primary,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                   child: const Text(
                     'Get Started',
-                    style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -136,9 +138,9 @@ class OfficeWelcomeScreen extends ConsumerWidget {
     await ref.read(selectedOfficeProvider.notifier).completeSetup();
 
     if (context.mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
     }
   }
 }

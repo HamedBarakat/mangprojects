@@ -66,8 +66,16 @@ class ProjectRepository {
         .collection('projects')
         .where('officeId', isEqualTo: officeId)
         .get();
-    final count = snap.docs.length + 1;
-    return 'PRJ${count.toString().padLeft(3, '0')}';
+
+    int maxNum = 0;
+    for (final doc in snap.docs) {
+      final code = doc.data()['projectCode'] as String? ?? '';
+      if (code.startsWith('PRJ')) {
+        final num = int.tryParse(code.substring(3)) ?? 0;
+        if (num > maxNum) maxNum = num;
+      }
+    }
+    return 'PRJ${(maxNum + 1).toString().padLeft(3, '0')}';
   }
 
   // ── Tasks ─────────────────────────────────────────────────────────────────

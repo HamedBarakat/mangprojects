@@ -7,6 +7,7 @@ import '../controllers/home_providers.dart';
 import '../../../../features/office/presentation/controllers/office_providers.dart';
 import 'package:mang_projects/features/employees/presentation/screens/employees_screen.dart';
 import '../../../projects/presentation/screens/projects_screen.dart';
+import '../../../projects/presentation/screens/project_details_screen.dart';
 import '../../../projects/presentation/controllers/project_providers.dart';
 import '../../../projects/presentation/controllers/task_providers.dart';
 import '../../../projects/presentation/screens/add_edit_project_screen.dart';
@@ -16,10 +17,13 @@ import '../../../attendance/presentation/screens/attendance_screen.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
 import '../../../reports/presentation/screens/reports_screen.dart';
 import '../../../client/presentation/screens/client_screen.dart';
+import '../../../client/presentation/screens/clients_screen.dart';
 import 'package:mang_projects/features/office/presentation/controllers/office_settings_providers.dart';
-import '../../../projects/presentation/screens/project_details_screen.dart';
 import '../../../projects/presentation/screens/my_tasks_screen.dart';
 import '../../../employees/presentation/screens/add_edit_employee_screen.dart';
+import 'package:mang_projects/features/client/presentation/screens/client_project_detail_screen.dart';
+import '../../../notifications/presentation/screens/notifications_screen.dart';
+import '../../../notifications/presentation/controllers/notification_providers.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -31,13 +35,14 @@ class HomeScreen extends ConsumerWidget {
     return userAsync.when(
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (_, __) =>
+      error: (_, _) =>
           const Scaffold(body: Center(child: Text('Error loading user data'))),
       data: (UserModel? user) {
-        if (user == null)
+        if (user == null) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
+        }
         return _HomeScaffold(user: user);
       },
     );
@@ -112,11 +117,14 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
               ),
             ),
           ),
+          // ── Notification Bell ──────────────────────────────────────────────
+          if (!user.isClient && !user.isAdministration)
+            _HomeNotificationBell(),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
-              await ref.read(localStorageProvider).clearAll();
+              await ref.read(selectedOfficeProvider.notifier).clearOffice();
             },
           ),
         ],
@@ -178,70 +186,115 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
 
     // Admin
     if (user.isAdmin) {
-      items.add(const NavigationDestination(
-        icon: Icon(Icons.people_outline_rounded),
-        selectedIcon: Icon(Icons.people_rounded),
-        label: 'Employees',
-      ));
-      items.add(const NavigationDestination(
-        icon: Icon(Icons.access_time_outlined),
-        selectedIcon: Icon(Icons.access_time_filled_rounded),
-        label: 'Attendance',
-      ));
-      items.add(const NavigationDestination(
-        icon: Icon(Icons.bar_chart_outlined),
-        selectedIcon: Icon(Icons.bar_chart_rounded),
-        label: 'Reports',
-      ));
+      items.add(
+        const NavigationDestination(
+          icon: Icon(Icons.people_outline_rounded),
+          selectedIcon: Icon(Icons.people_rounded),
+          label: 'Employees',
+        ),
+      );
+      items.add(
+        const NavigationDestination(
+          icon: Icon(Icons.business_outlined),
+          selectedIcon: Icon(Icons.business_rounded),
+          label: 'Clients',
+        ),
+      );
+      items.add(
+        const NavigationDestination(
+          icon: Icon(Icons.access_time_outlined),
+          selectedIcon: Icon(Icons.access_time_filled_rounded),
+          label: 'Attendance',
+        ),
+      );
+      items.add(
+        const NavigationDestination(
+          icon: Icon(Icons.bar_chart_outlined),
+          selectedIcon: Icon(Icons.bar_chart_rounded),
+          label: 'Reports',
+        ),
+      );
     }
 
     // Management: reviewer-level + Attendance + Reports
     if (user.isManagement && !user.isAdmin) {
-      items.add(const NavigationDestination(
-        icon: Icon(Icons.task_outlined),
-        selectedIcon: Icon(Icons.task_rounded),
-        label: 'My Tasks',
-      ));
-      items.add(const NavigationDestination(
-        icon: Icon(Icons.access_time_outlined),
-        selectedIcon: Icon(Icons.access_time_filled_rounded),
-        label: 'Attendance',
-      ));
-      items.add(const NavigationDestination(
-        icon: Icon(Icons.bar_chart_outlined),
-        selectedIcon: Icon(Icons.bar_chart_rounded),
-        label: 'Reports',
-      ));
+      items.add(
+        const NavigationDestination(
+          icon: Icon(Icons.task_outlined),
+          selectedIcon: Icon(Icons.task_rounded),
+          label: 'My Tasks',
+        ),
+      );
+      items.add(
+        const NavigationDestination(
+          icon: Icon(Icons.access_time_outlined),
+          selectedIcon: Icon(Icons.access_time_filled_rounded),
+          label: 'Attendance',
+        ),
+      );
+      items.add(
+        const NavigationDestination(
+          icon: Icon(Icons.bar_chart_outlined),
+          selectedIcon: Icon(Icons.bar_chart_rounded),
+          label: 'Reports',
+        ),
+      );
     }
 
     // Team Leader / Engineer
     if (user.isTeamLeader || user.isEngineer) {
-      items.add(const NavigationDestination(
-        icon: Icon(Icons.task_outlined),
-        selectedIcon: Icon(Icons.task_rounded),
-        label: 'My Tasks',
-      ));
-      items.add(const NavigationDestination(
-        icon: Icon(Icons.access_time_outlined),
-        selectedIcon: Icon(Icons.access_time_filled_rounded),
-        label: 'Attendance',
-      ));
+      items.add(
+        const NavigationDestination(
+          icon: Icon(Icons.task_outlined),
+          selectedIcon: Icon(Icons.task_rounded),
+          label: 'My Tasks',
+        ),
+      );
+      items.add(
+        const NavigationDestination(
+          icon: Icon(Icons.access_time_outlined),
+          selectedIcon: Icon(Icons.access_time_filled_rounded),
+          label: 'Attendance',
+        ),
+      );
     }
 
     // Reviewer
     if (user.isReviewer) {
-      items.add(const NavigationDestination(
-        icon: Icon(Icons.task_outlined),
-        selectedIcon: Icon(Icons.task_rounded),
-        label: 'My Tasks',
-      ));
+      items.add(
+        const NavigationDestination(
+          icon: Icon(Icons.task_outlined),
+          selectedIcon: Icon(Icons.task_rounded),
+          label: 'My Tasks',
+        ),
+      );
     }
 
-    items.add(const NavigationDestination(
-      icon: Icon(Icons.settings_outlined),
-      selectedIcon: Icon(Icons.settings_rounded),
-      label: 'Settings',
-    ));
+    // DC (Document Controller)
+    if (user.isDC) {
+      items.add(
+        const NavigationDestination(
+          icon: Icon(Icons.task_outlined),
+          selectedIcon: Icon(Icons.task_rounded),
+          label: 'My Tasks',
+        ),
+      );
+      items.add(
+        const NavigationDestination(
+          icon: Icon(Icons.access_time_outlined),
+          selectedIcon: Icon(Icons.access_time_filled_rounded),
+          label: 'Attendance',
+        ),
+      );
+    }
+
+    items.add(
+      const NavigationDestination(
+        icon: Icon(Icons.settings_outlined),
+        selectedIcon: Icon(Icons.settings_rounded),
+        label: 'Settings',
+      ),
+    );
 
     return items;
   }
@@ -262,11 +315,12 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
     if (index == 0) return _DashboardTab(user: user);
     if (index == 1) return const ProjectsScreen();
 
-    // Admin: Home/Projects/Employees/Attendance/Reports/Settings
+    // Admin: Home/Projects/Employees/Clients/Attendance/Reports/Settings
     if (user.isAdmin) {
       if (index == 2) return const EmployeesScreen();
-      if (index == 3) return const AttendanceScreen();
-      if (index == 4) return const ReportsScreen();
+      if (index == 3) return const ClientsScreen();
+      if (index == 4) return const AttendanceScreen();
+      if (index == 5) return const ReportsScreen();
       return const SettingsScreen();
     }
 
@@ -291,6 +345,13 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
       return const SettingsScreen();
     }
 
+    // DC (Document Controller)
+    if (user.isDC) {
+      if (index == 2) return const MyTasksScreen();
+      if (index == 3) return const AttendanceScreen();
+      return const SettingsScreen();
+    }
+
     return const SettingsScreen();
   }
 
@@ -303,14 +364,24 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
 
   Color _getRoleColor(String role, ColorScheme cs) {
     switch (role) {
-      case 'admin':          return Colors.deepPurple;
-      case 'engineer':       return cs.primary;
-      case 'team_leader':    return Colors.teal;
-      case 'reviewer':       return Colors.indigo;
-      case 'management':     return Colors.brown;
-      case 'administration': return Colors.blueGrey;
-      case 'client':         return Colors.orange;
-      default:               return cs.primary;
+      case 'admin':
+        return Colors.deepPurple;
+      case 'engineer':
+        return cs.primary;
+      case 'team_leader':
+        return Colors.teal;
+      case 'reviewer':
+        return Colors.indigo;
+      case 'management':
+        return Colors.brown;
+      case 'administration':
+        return Colors.blueGrey;
+      case 'dc':
+        return Colors.deepOrange;
+      case 'client':
+        return Colors.orange;
+      default:
+        return cs.primary;
     }
   }
 }
@@ -324,9 +395,7 @@ class _DashboardTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
-    final employeesAsync = ref.watch(
-      employeesCountProvider(user.officeId),
-    );
+    final employeesAsync = ref.watch(employeesCountProvider(user.officeId));
     final activeProjectsCount = ref.watch(activeProjectsCountProvider);
     final projectsAsync = ref.watch(projectsProvider);
 
@@ -335,7 +404,7 @@ class _DashboardTab extends ConsumerWidget {
     final recentProjects = projectsAsync.when(
       data: (list) => list.take(3).toList(),
       loading: () => <ProjectModel>[],
-      error: (_, __) => <ProjectModel>[],
+      error: (_, _) => <ProjectModel>[],
     );
 
     return SingleChildScrollView(
@@ -392,7 +461,7 @@ class _DashboardTab extends ConsumerWidget {
                         value: employeesAsync.when(
                           data: (c) => c.toString(),
                           loading: () => '...',
-                          error: (_, __) => '—',
+                          error: (_, _) => '—',
                         ),
                         color: Colors.deepPurple,
                       ),
@@ -408,7 +477,7 @@ class _DashboardTab extends ConsumerWidget {
                             .length
                             .toString(),
                         loading: () => '...',
-                        error: (_, __) => '—',
+                        error: (_, _) => '—',
                       ),
                       color: Colors.green,
                     ),
@@ -527,14 +596,13 @@ class _DashboardTab extends ConsumerWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: recentProjects.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, i) => ProjectCard(
                 project: recentProjects[i],
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        ProjectDetailsScreen(project: recentProjects[i]),
+                    builder: (_) => ProjectDetailsScreen(project: recentProjects[i]),
                   ),
                 ),
               ),
@@ -550,49 +618,51 @@ class _DashboardTab extends ConsumerWidget {
   }
 
   String _buildPendingTasksValue(WidgetRef ref) {
-    // Reviewer & Management: tasks under_review
     if (user.isReviewer || user.isManagement) {
-      final async = ref.watch(tasksForReviewProvider);
-      return async.when(
-        data: (tasks) => tasks.length.toString(),
+      final qcTasksAsync = ref.watch(qcTasksProvider);
+
+      return qcTasksAsync.when(
+        data: (tasks) {
+          final pending = tasks
+              .where(
+                (t) => t.status == 'qc_review' || t.status == 'client_review',
+              )
+              .length;
+          return pending.toString();
+        },
         loading: () => '...',
-        error: (_, __) => '—',
+        error: (_, _) => '0',
       );
     }
 
     if (user.isTeamLeader) {
-      final async = ref.watch(teamTasksProvider);
-      return async.when(
-        data: (tasks) => tasks
-            .where(
-              (t) => t.status == 'not_started' || t.status == 'in_progress',
-            )
-            .length
-            .toString(),
+      final teamLeaderTasksAsync = ref.watch(teamLeaderTasksProvider);
+
+      return teamLeaderTasksAsync.when(
+        data: (tasks) {
+          final pending = tasks
+              .where((t) => t.status == 'team_leader_review')
+              .length;
+          return pending.toString();
+        },
         loading: () => '...',
-        error: (_, __) => '—',
+        error: (_, _) => '0',
       );
     }
 
-    if (user.isEngineer) {
-      final async = ref.watch(myTasksProvider);
-      return async.when(
-        data: (tasks) => tasks
+    final myTasksAsync = ref.watch(myTasksProvider);
+
+    return myTasksAsync.when(
+      data: (tasks) {
+        final pending = tasks
             .where(
               (t) => t.status == 'not_started' || t.status == 'in_progress',
             )
-            .length
-            .toString(),
-        loading: () => '...',
-        error: (_, __) => '—',
-      );
-    }
-
-    final projectsAsync = ref.watch(projectsProvider);
-    return projectsAsync.when(
-      data: (_) => '—',
+            .length;
+        return pending.toString();
+      },
       loading: () => '...',
-      error: (_, __) => '—',
+      error: (_, _) => '0',
     );
   }
 }
@@ -608,7 +678,9 @@ class _OfficeCard extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
 
     // ✅ قرأ الـ custom job titles من الـ office settings
-    final customTitles = ref.watch(officeSettingsProvider).valueOrNull
+    final customTitles = ref
+        .watch(officeSettingsProvider)
+        .valueOrNull
         ?.effectiveJobTitles;
     final titleLabel = user.jobTitleLabelFrom(customTitles);
 
@@ -775,6 +847,53 @@ class _QuickActionButton extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+// ── Notification Bell for HomeScreen (dark AppBar version) ───────────────────
+class _HomeNotificationBell extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final countAsync = ref.watch(unreadNotificationsCountProvider);
+    final count = countAsync.value ?? 0;
+    return IconButton(
+      tooltip: "Notifications",
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+      ),
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(
+            count > 0
+                ? Icons.notifications_rounded
+                : Icons.notifications_none_rounded,
+          ),
+          if (count > 0)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: const BoxDecoration(
+                    color: Colors.red, shape: BoxShape.circle),
+                constraints:
+                    const BoxConstraints(minWidth: 16, minHeight: 16),
+                child: Text(
+                  count > 99 ? "99+" : "$count",
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

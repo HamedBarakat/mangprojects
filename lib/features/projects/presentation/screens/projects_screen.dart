@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mang_projects/features/client/presentation/screens/client_project_detail_screen.dart';
 
 import '../controllers/project_providers.dart';
 import '../widgets/project_card.dart';
 import 'add_edit_project_screen.dart';
 import 'project_details_screen.dart';
 import '../../../../features/home/presentation/controllers/home_providers.dart';
+import '../../../../features/office/presentation/controllers/office_settings_providers.dart';
 
 class ProjectsScreen extends ConsumerWidget {
   const ProjectsScreen({super.key});
@@ -16,7 +18,6 @@ class ProjectsScreen extends ConsumerWidget {
     final projects = ref.watch(filteredProjectsProvider);
     final projectsAsync = ref.watch(projectsProvider);
     final statusFilter = ref.watch(projectStatusFilterProvider);
-    final typeFilter = ref.watch(projectTypeFilterProvider);
     final userAsync = ref.watch(currentUserProvider);
 
     final isAdmin = userAsync.value?.isAdmin ?? false;
@@ -96,43 +97,33 @@ class ProjectsScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                // Type filter
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _FilterChip(
-                        label: 'All Types',
-                        selected: typeFilter == 'all',
-                        onTap: () =>
-                            ref.read(projectTypeFilterProvider.notifier).state =
-                                'all',
+                // Type filter — ديناميكي من office settings
+                Consumer(
+                  builder: (context, ref, _) {
+                    final projectTypes = ref.watch(projectTypesProvider);
+                    final typeFilter = ref.watch(projectTypeFilterProvider);
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _FilterChip(
+                            label: 'All Types',
+                            selected: typeFilter == 'all',
+                            onTap: () => ref
+                                .read(projectTypeFilterProvider.notifier)
+                                .state = 'all',
+                          ),
+                          ...projectTypes.map((type) => _FilterChip(
+                            label: type,
+                            selected: typeFilter == type,
+                            onTap: () => ref
+                                .read(projectTypeFilterProvider.notifier)
+                                .state = type,
+                          )),
+                        ],
                       ),
-                      _FilterChip(
-                        label: 'Design',
-                        selected: typeFilter == 'design',
-                        onTap: () =>
-                            ref.read(projectTypeFilterProvider.notifier).state =
-                                'design',
-                      ),
-                      _FilterChip(
-                        label: 'Exec. Drawings',
-                        selected: typeFilter == 'executive_drawings',
-                        color: Colors.blue.shade700,
-                        onTap: () =>
-                            ref.read(projectTypeFilterProvider.notifier).state =
-                                'executive_drawings',
-                      ),
-                      _FilterChip(
-                        label: 'Supervision',
-                        selected: typeFilter == 'supervision',
-                        color: Colors.orange.shade700,
-                        onTap: () =>
-                            ref.read(projectTypeFilterProvider.notifier).state =
-                                'supervision',
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ],
             ),

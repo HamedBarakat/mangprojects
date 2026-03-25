@@ -20,7 +20,21 @@ final employeesProvider = StreamProvider<List<EmployeeModel>>((ref) {
           .watchEmployees(user.officeId);
     },
     loading: () => const Stream.empty(),
-    error: (_, __) => const Stream.empty(),
+    error: (_, _) => const Stream.empty(),
+  );
+});
+
+final clientAccountsProvider = StreamProvider<List<EmployeeModel>>((ref) {
+  final userAsync = ref.watch(currentUserProvider);
+  return userAsync.when(
+    data: (user) {
+      if (user == null) return const Stream.empty();
+      return ref
+          .watch(employeeRepositoryProvider)
+          .watchClientAccounts(user.officeId);
+    },
+    loading: () => const Stream.empty(),
+    error: (_, _) => const Stream.empty(),
   );
 });
 
@@ -50,7 +64,7 @@ final filteredEmployeesProvider = Provider<List<EmployeeModel>>((ref) {
       return filtered;
     },
     loading: () => [],
-    error: (_, __) => [],
+    error: (_, _) => [],
   );
 });
 
@@ -65,6 +79,6 @@ final employeeCodeProvider = FutureProvider<String>((ref) async {
           .generateEmployeeCode(user.officeId);
     },
     loading: () async => 'EMP001',
-    error: (_, __) async => 'EMP001',
+    error: (_, _) async => 'EMP001',
   );
 });

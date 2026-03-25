@@ -3,17 +3,165 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // This rule allows anyone with your Firestore database reference to view, edit,
-    // and delete all data in your Firestore database. It is useful for getting
-    // started, but it is configured to expire after 30 days because it
-    // leaves your app open to attackers. At that time, all client
-    // requests to your Firestore database will be denied.
-    //
-    // Make sure to write security rules for your app before that time, or else
-    // all client requests to your Firestore database will be denied until you Update
-    // your rules
-    match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2026, 3, 23);
+    // ── Helper functions ────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (currentUser().adminFlag == true || currentUser().role == 'admin');
+    }
+
+    function isReviewer() {
+      return isSignedIn() && currentUser().role == 'reviewer';
+    }
+
+    function isDC() {
+      return isSignedIn() && currentUser().role == 'dc';
+    }
+
+    function isManagement() {
+      return isSignedIn() && currentUser().role == 'management';
+    }
+
+    function isSectionHeadOrAbove() {
+      return isSignedIn() && (
+        currentUser().jobTitle == 'head_of_department' ||
+        currentUser().jobTitle == 'coo' ||
+        currentUser().jobTitle == 'principal_managing_partner' ||
+        currentUser().jobTitle == 'technical_office_manager'
+      );
+    }
+
+    // Admin + QC + DC + Management + Section Head / COO / Principal
+    function canSeeAll() {
+      return isAdmin() || isReviewer() || isDC() || isManagement() || isSectionHeadOrAbove();
+    }
+
+    function isAdminOrReviewer() {
+      return isAdmin() || isReviewer();
+    }
+
+    function belongsToOffice(officeId) {
+      return isSignedIn() && currentUser().officeId == officeId;
+    }
+
+    function isClientEngineer() {
+      return isSignedIn() && currentUser().role == 'client_engineer';
+    }
+
+    // ── Offices ─────────────────────────────────────────────────────────────
+    match /offices/{officeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      match /settings/{doc} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
+    }
+
+    // ── Users ────────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId ||
+        currentUser().officeId == resource.data.officeId
+      );
+      allow create: if isSignedIn();
+      allow update: if isAdmin() || request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+
+    // ── Clients ──────────────────────────────────────────────────────────────
+    match /clients/{clientId} {
+      allow read: if isSignedIn();
+      allow write: if isAdminOrReviewer();
+    }
+
+    // ── Projects ─────────────────────────────────────────────────────────────
+    match /projects/{projectId} {
+      allow read: if isSignedIn() && (
+        belongsToOffice(resource.data.officeId) ||
+        (isClientEngineer() && resource.data.clientId == currentUser().clientId)
+      );
+      allow create: if isAdminOrReviewer();
+      allow update: if isAdminOrReviewer() || (isDC() && belongsToOffice(resource.data.officeId));
+      allow delete: if isAdmin();
+    }
+
+    // ── Tasks ────────────────────────────────────────────────────────────────
+    match /tasks/{taskId} {
+      // السماح بالقراءة لأي موظف signed-in (الفلترة بتتم في الكود بـ officeId/projectId)
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (isAdminOrReviewer() || currentUser().role == 'team_leader');
+      allow update: if isSignedIn() && (
+        belongsToOffice(resource.data.officeId) || isDC()
+      );
+      allow delete: if isAdminOrReviewer();
+
+      // ── Task subcollections (comments + attachments) ──────────────────────
+      match /comments/{commentId} {
+        allow read, write: if isSignedIn();
+      }
+      match /attachments/{attachmentId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    // ── Task Activities ───────────────────────────────────────────────────────
+    match /task_activities/{activityId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Notifications ────────────────────────────────────────────────────────
+    match /notifications/{notifId} {
+      // كل موظف يقرأ إشعاراته فقط
+      allow read: if isSignedIn() && (
+        resource.data.recipientId == request.auth.uid ||
+        isAdmin()
+      );
+      // أي موظف مصرّح له يكتب إشعارات (batch send من الـ app)
+      allow create: if isSignedIn();
+      // صاحب الإشعار يعدّله (markAsRead) أو الـ Admin
+      allow update: if isSignedIn() && (
+        resource.data.recipientId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.recipientId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ── Attendance ───────────────────────────────────────────────────────────
+    match /attendance/{docId} {
+      allow read: if isSignedIn() && (
+        belongsToOffice(resource.data.officeId) || canSeeAll()
+      );
+      allow write: if isSignedIn() && belongsToOffice(request.resource.data.officeId);
+    }
+
+    // ── Daily Logs ───────────────────────────────────────────────────────────
+    match /daily_logs/{docId} {
+      allow read: if isSignedIn() && belongsToOffice(resource.data.officeId);
+      allow write: if isSignedIn() && belongsToOffice(request.resource.data.officeId);
+    }
+
+    // ── Overtime Requests ────────────────────────────────────────────────────
+    match /overtime_requests/{docId} {
+      allow read: if isSignedIn() && belongsToOffice(resource.data.officeId);
+      allow write: if isSignedIn() && belongsToOffice(request.resource.data.officeId);
+    }
+
+    // ── Developers ───────────────────────────────────────────────────────────
+    match /developers/{devId} {
+      allow read, write: if isSignedIn();
     }
   }
 }

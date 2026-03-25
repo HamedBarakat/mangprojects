@@ -15,15 +15,20 @@ final projectsProvider = StreamProvider<List<ProjectModel>>((ref) {
   return userAsync.when(
     data: (user) {
       if (user == null) return const Stream.empty();
+      // canSeeAllProjects: Admin + QC + Management + DC + Section Head + COO + Principal
+      // كلهم يشوفوا كل مشاريع المكتب
       return ref.watch(projectRepositoryProvider).watchProjects(user.officeId);
     },
     loading: () => const Stream.empty(),
-    error: (_, __) => const Stream.empty(),
+    error: (_, _) => const Stream.empty(),
   );
 });
 
 // ── Watch single project real-time ────────────────────────────────────────────
-final singleProjectProvider = StreamProvider.family<ProjectModel?, String>((ref, projectId) {
+final singleProjectProvider = StreamProvider.family<ProjectModel?, String>((
+  ref,
+  projectId,
+) {
   return ref.watch(projectRepositoryProvider).watchSingleProject(projectId);
 });
 
@@ -44,17 +49,21 @@ final filteredProjectsProvider = Provider<List<ProjectModel>>((ref) {
         filtered = filtered.where((p) => p.status == statusFilter).toList();
       }
       if (typeFilter != 'all') {
+        // الـ type بيتخزن كـ string كامل مثل "Shop Drawings" وليس snake_case
         filtered = filtered.where((p) => p.type == typeFilter).toList();
       }
       return filtered;
     },
     loading: () => [],
-    error: (_, __) => [],
+    error: (_, _) => [],
   );
 });
 
 // ── Watch tasks for a project ─────────────────────────────────────────────────
-final tasksProvider = StreamProvider.family<List<TaskModel>, String>((ref, projectId) {
+final tasksProvider = StreamProvider.family<List<TaskModel>, String>((
+  ref,
+  projectId,
+) {
   return ref.watch(projectRepositoryProvider).watchTasks(projectId);
 });
 
@@ -64,10 +73,12 @@ final projectCodeProvider = FutureProvider<String>((ref) async {
   return userAsync.when(
     data: (user) async {
       if (user == null) return 'PRJ001';
-      return await ref.watch(projectRepositoryProvider).generateProjectCode(user.officeId);
+      return await ref
+          .watch(projectRepositoryProvider)
+          .generateProjectCode(user.officeId);
     },
     loading: () async => 'PRJ001',
-    error: (_, __) async => 'PRJ001',
+    error: (_, _) async => 'PRJ001',
   );
 });
 
@@ -77,6 +88,19 @@ final activeProjectsCountProvider = Provider<int>((ref) {
   return projectsAsync.when(
     data: (projects) => projects.where((p) => p.status == 'active').length,
     loading: () => 0,
-    error: (_, __) => 0,
+    error: (_, _) => 0,
+  );
+});
+
+// ── Projects by client ────────────────────────────────────────────────────────
+final projectsByClientProvider = Provider.family<List<ProjectModel>, String>((
+  ref,
+  clientId,
+) {
+  final projectsAsync = ref.watch(projectsProvider);
+  return projectsAsync.when(
+    data: (projects) => projects.where((p) => p.clientId == clientId).toList(),
+    loading: () => [],
+    error: (_, _) => [],
   );
 });

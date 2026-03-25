@@ -1,169 +1,507 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import 'models/task_model.dart';
 import 'models/daily_log_model.dart';
+import 'repositories/task_activity_repository.dart';
+import 'models/task_activity_model.dart';
+import '../../notifications/data/notification_repository.dart';
 
 class TaskRepository {
-  final _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore;
 
-  CollectionReference get _tasks => _db.collection('tasks');
-  CollectionReference get _dailyLogs => _db.collection('daily_logs');
-  CollectionReference get _projects => _db.collection('projects');
+  TaskRepository(this._firestore);
 
-  // ── Create Task ────────────────────────────────────────────────────────────
-  Future<String> createTask(TaskModel task) async {
-    final doc = _tasks.doc();
-    final newTask = TaskModel(
-      id: doc.id,
-      officeId: task.officeId,
-      projectId: task.projectId,
-      projectName: task.projectName,
-      title: task.title,
-      description: task.description,
-      category: task.category,
-      discipline: task.discipline,
-      assignedTo: task.assignedTo,
-      assignedToName: task.assignedToName,
-      teamLeaderId: task.teamLeaderId,
-      teamLeaderName: task.teamLeaderName,
-      reviewerId: task.reviewerId,
-      reviewerName: task.reviewerName,
-      startDate: task.startDate,
-      endDate: task.endDate,
-      plannedHours: task.plannedHours,
-      actualHours: 0,
-      status: 'not_started',
-      approvalStatus: 'pending',
-      approvalNotes: '',
-      approvedAt: null,
-      createdBy: task.createdBy,
-      createdAt: DateTime.now(),
-      notes: task.notes,
+  CollectionReference<Map<String, dynamic>> get _tasksRef =>
+      _firestore.collection('tasks');
+
+  CollectionReference<Map<String, dynamic>> get _projectsRef =>
+      _firestore.collection('projects');
+
+  final TaskActivityRepository _activityRepository = TaskActivityRepository();
+  final NotificationRepository _notifRepo = NotificationRepository();
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ───────────────────────────────────────────────────────────────────────────
+
+  int _resolveProgress({required String status, double? inProgressValue}) {
+    switch (status) {
+      case 'not_started':
+        return 0;
+      case 'in_progress':
+        final value = (inProgressValue ?? 0).round();
+        if (value < 0) return 0;
+        if (value > 60) return 60;
+        return value;
+      case 'team_leader_review':
+        return 70;
+      case 'qc_review':
+        return 80;
+      case 'client_review':
+        return 90;
+      case 'completed':
+        return 100;
+      default:
+        return 0;
+    }
+  }
+
+  Future<TaskModel?> _getTask(String taskId) async {
+    final doc = await _tasksRef.doc(taskId).get();
+    if (!doc.exists) return null;
+    return TaskModel.fromFirestore(doc);
+  }
+
+  Future<void> _logActivity({
+    required TaskModel task,
+    required String type,
+    required String message,
+    required String userName,
+    required String userRole,
+  }) async {
+    await _activityRepository.addActivity(
+      TaskActivity(
+        id: '',
+        taskId: task.id,
+        officeId: task.officeId,
+        type: type,
+        message: message,
+        userName: userName,
+        userRole: userRole,
+        createdAt: DateTime.now(),
+      ),
     );
-    await doc.set(newTask.toFirestore());
-    await _updateProjectCompletion(task.projectId);
-    return doc.id;
   }
 
-  // ── Update Task ────────────────────────────────────────────────────────────
-  Future<void> updateTask(TaskModel task) async {
-    await _tasks.doc(task.id).update(task.toFirestore());
-  }
-
-  // ── Delete Task ────────────────────────────────────────────────────────────
-  Future<void> deleteTask(String taskId) async {
-    final taskDoc = await _tasks.doc(taskId).get();
-    final projectId =
-        (taskDoc.data() as Map<String, dynamic>?)?['projectId'] ?? '';
-    await _tasks.doc(taskId).delete();
-    if (projectId.isNotEmpty) await _updateProjectCompletion(projectId);
-  }
-
-  // ── Watch tasks for a project ──────────────────────────────────────────────
-  Stream<List<TaskModel>> watchProjectTasks(String projectId) {
-    return _tasks
+  Future<void> _recalculateProjectCompletion(String projectId) async {
+    final snapshot = await _tasksRef
         .where('projectId', isEqualTo: projectId)
-        .orderBy('createdAt', descending: false)
-        .snapshots()
-        .map((snap) => snap.docs.map(TaskModel.fromFirestore).toList());
-  }
+        .get();
 
-  // ── Watch tasks assigned to engineer ──────────────────────────────────────
-  Stream<List<TaskModel>> watchMyTasks({
-    required String officeId,
-    required String employeeId,
-  }) {
-    return _tasks
-        .where('officeId', isEqualTo: officeId)
-        .where('assignedTo', isEqualTo: employeeId)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map(TaskModel.fromFirestore).toList());
-  }
-
-  // ── Watch tasks for review (Reviewer) ─────────────────────────────────────
-  Stream<List<TaskModel>> watchTasksForReview({
-    required String officeId,
-    required String reviewerId,
-  }) {
-    return _tasks
-        .where('officeId', isEqualTo: officeId)
-        .where('reviewerId', isEqualTo: reviewerId)
-        .where('status', isEqualTo: 'under_review')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map(TaskModel.fromFirestore).toList());
-  }
-
-  // ── Watch tasks by team leader ─────────────────────────────────────────────
-  Stream<List<TaskModel>> watchTeamTasks({
-    required String officeId,
-    required String teamLeaderId,
-  }) {
-    return _tasks
-        .where('officeId', isEqualTo: officeId)
-        .where('teamLeaderId', isEqualTo: teamLeaderId)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map(TaskModel.fromFirestore).toList());
-  }
-
-  // ── Update task status ─────────────────────────────────────────────────────
-  Future<void> updateTaskStatus({
-    required String taskId,
-    required String status,
-  }) async {
-    await _tasks.doc(taskId).update({'status': status});
-    final taskDoc = await _tasks.doc(taskId).get();
-    final projectId =
-        (taskDoc.data() as Map<String, dynamic>?)?['projectId'] ?? '';
-    if (projectId.isNotEmpty) await _updateProjectCompletion(projectId);
-  }
-
-  // ── Submit task for review ─────────────────────────────────────────────────
-  Future<void> submitForReview(String taskId) async {
-    await _tasks.doc(taskId).update({'status': 'under_review'});
-  }
-
-  // ── Approve / Reject task (Reviewer) ──────────────────────────────────────
-  Future<void> reviewTask({
-    required String taskId,
-    required String approvalStatus,
-    required String notes,
-    required String reviewerId,
-  }) async {
-    await _tasks.doc(taskId).update({
-      'approvalStatus': approvalStatus,
-      'approvalNotes': notes,
-      'approvedAt': approvalStatus != 'rejected'
-          ? Timestamp.fromDate(DateTime.now())
-          : null,
-      if (approvalStatus == 'approved') 'status': 'completed',
-      if (approvalStatus == 'rejected') 'status': 'in_progress',
-    });
-
-    final taskDoc = await _tasks.doc(taskId).get();
-    final projectId =
-        (taskDoc.data() as Map<String, dynamic>?)?['projectId'] ?? '';
-    if (projectId.isNotEmpty) await _updateProjectCompletion(projectId);
-  }
-
-  // ── Update project completion percentage ──────────────────────────────────
-  Future<void> _updateProjectCompletion(String projectId) async {
-    final snap = await _tasks.where('projectId', isEqualTo: projectId).get();
-    final tasks = snap.docs.map(TaskModel.fromFirestore).toList();
-    if (tasks.isEmpty) {
-      await _projects.doc(projectId).update({'completionPercentage': 0.0});
+    if (snapshot.docs.isEmpty) {
+      await _projectsRef.doc(projectId).update({'completionPercentage': 0});
       return;
     }
-    final completed = tasks.where((t) => t.status == 'completed').length;
-    final percentage = (completed / tasks.length) * 100;
-    await _projects.doc(projectId).update({'completionPercentage': percentage});
+
+    double total = 0;
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      total += ((data['progress'] ?? 0) as num).toDouble();
+    }
+
+    final average = total / snapshot.docs.length;
+
+    await _projectsRef.doc(projectId).update({'completionPercentage': average});
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
+  Map<String, dynamic> _withUpdatedAt(Map<String, dynamic> data) {
+    return {...data, 'updatedAt': Timestamp.now()};
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Streams / Queries
+  // ───────────────────────────────────────────────────────────────────────────
+
+  Stream<List<TaskModel>> watchProjectTasks(String projectId) {
+    return _tasksRef
+        .where('projectId', isEqualTo: projectId)
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map(TaskModel.fromFirestore).toList()
+                ..sort((a, b) => a.endDate.compareTo(b.endDate)),
+        );
+  }
+
+  Stream<List<TaskModel>> watchTasksByEngineer(String engineerId) {
+    return _tasksRef
+        .where('assignedEngineerIds', arrayContains: engineerId)
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map(TaskModel.fromFirestore).toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+        );
+  }
+
+  Stream<List<TaskModel>> watchTasksByReviewer(String reviewerId) {
+    return _tasksRef
+        .where('reviewerId', isEqualTo: reviewerId)
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map(TaskModel.fromFirestore).toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+        );
+  }
+
+  Stream<List<TaskModel>> watchTasksByTeamLeader(String teamLeaderId) {
+    return _tasksRef
+        .where('teamLeaderId', isEqualTo: teamLeaderId)
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map(TaskModel.fromFirestore).toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+        );
+  }
+
+  Stream<TaskModel?> watchTaskById(String taskId) {
+    return _tasksRef.doc(taskId).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      return TaskModel.fromFirestore(doc);
+    });
+  }
+
+  Future<Map<String, int>> getProjectTaskStats(String projectId) async {
+    final snapshot = await _tasksRef
+        .where('projectId', isEqualTo: projectId)
+        .get();
+
+    int total = 0;
+    int notStarted = 0;
+    int inProgress = 0;
+    int teamLeaderReview = 0;
+    int qcReview = 0;
+    int clientReview = 0;
+    int completed = 0;
+    int overdue = 0;
+
+    for (final doc in snapshot.docs) {
+      final task = TaskModel.fromFirestore(doc);
+      total++;
+
+      switch (task.status) {
+        case 'not_started':
+          notStarted++;
+          break;
+        case 'in_progress':
+          inProgress++;
+          break;
+        case 'team_leader_review':
+          teamLeaderReview++;
+          break;
+        case 'qc_review':
+          qcReview++;
+          break;
+        case 'client_review':
+          clientReview++;
+          break;
+        case 'completed':
+          completed++;
+          break;
+      }
+
+      if (task.isOverdue) overdue++;
+    }
+
+    return {
+      'total': total,
+      'not_started': notStarted,
+      'in_progress': inProgress,
+      'team_leader_review': teamLeaderReview,
+      'qc_review': qcReview,
+      'client_review': clientReview,
+      'completed': completed,
+      'overdue': overdue,
+    };
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // CRUD
+  // ───────────────────────────────────────────────────────────────────────────
+
+  Future<void> createTask(TaskModel task, {String createdByName = ''}) async {
+    final data = task.copyWith(
+      status: 'not_started',
+      progress: 0,
+      createdAt: DateTime.now(),
+    );
+
+    await _tasksRef.add(_withUpdatedAt(data.toFirestore()));
+    await _recalculateProjectCompletion(data.projectId);
+
+    // إشعار إسناد task جديدة
+    try {
+      final officeWide = await _notifRepo.fetchOfficeWideStakeholders(data.officeId);
+      await _notifRepo.sendTaskAssignedNotification(
+        officeId: data.officeId,
+        taskId: data.id.isEmpty ? '' : data.id,
+        taskTitle: data.title,
+        projectId: data.projectId,
+        projectName: data.projectName,
+        engineerIds: data.assignedEngineerIds,
+        reviewerId: data.reviewerId,
+        teamLeaderId: data.teamLeaderId,
+        officeWideIds: officeWide,
+        assignedByName: createdByName,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> updateTask(TaskModel task) async {
+    await _tasksRef.doc(task.id).update(_withUpdatedAt(task.toFirestore()));
+
+    await _recalculateProjectCompletion(task.projectId);
+  }
+
+  Future<void> deleteTask(String taskId) async {
+    final task = await _getTask(taskId);
+    if (task == null) return;
+
+    if (task.status != 'completed') {
+      throw Exception('Cannot delete task before completion');
+    }
+    await _tasksRef.doc(taskId).delete();
+    await _recalculateProjectCompletion(task.projectId);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Progress
+  // ───────────────────────────────────────────────────────────────────────────
+
+  Future<void> updateTaskProgress({
+    required String taskId,
+    required double progressValue,
+  }) async {
+    final task = await _getTask(taskId);
+    if (task == null) return;
+
+    if (task.status != 'in_progress') {
+      throw Exception(
+        'Progress can only be updated while task is in progress.',
+      );
+    }
+
+    final resolved = _resolveProgress(
+      status: 'in_progress',
+      inProgressValue: progressValue,
+    );
+
+    await _tasksRef
+        .doc(taskId)
+        .update(_withUpdatedAt({'progress': resolved.toDouble()}));
+
+    await _recalculateProjectCompletion(task.projectId);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Workflow
+  // ───────────────────────────────────────────────────────────────────────────
+
+  // ── Notification helper ────────────────────────────────────────────────────
+  Future<void> _notify({
+    required TaskModel task,
+    required String newStatus,
+    required String changedByName,
+  }) async {
+    try {
+      final officeWide =
+          await _notifRepo.fetchOfficeWideStakeholders(task.officeId);
+      await _notifRepo.sendTaskStatusNotification(
+        officeId: task.officeId,
+        taskId: task.id,
+        taskTitle: task.title,
+        projectId: task.projectId,
+        projectName: task.projectName,
+        newStatus: newStatus,
+        changedByName: changedByName,
+        engineerIds: task.assignedEngineerIds,
+        teamLeaderId: task.teamLeaderId,
+        reviewerId: task.reviewerId,
+        officeWideIds: officeWide,
+      );
+    } catch (_) {
+      // Notifications are non-blocking — don't break the workflow
+    }
+  }
+
+  // ── Workflow ────────────────────────────────────────────────────────────────
+
+  Future<void> startTask(String taskId, {String userName = ''}) async {
+    final task = await _getTask(taskId);
+    if (task == null) return;
+
+    await _tasksRef.doc(taskId).update(_withUpdatedAt({
+      'status': 'in_progress',
+      'progress': _resolveProgress(
+        status: 'in_progress',
+        inProgressValue: task.progress,
+      ).toDouble(),
+    }));
+
+    await _recalculateProjectCompletion(task.projectId);
+    await _notify(task: task.copyWith(status: 'in_progress'),
+        newStatus: 'in_progress', changedByName: userName);
+  }
+
+  Future<void> submitToTeamLeaderReview(String taskId,
+      {String userName = ''}) async {
+    final task = await _getTask(taskId);
+    if (task == null) return;
+
+    await _tasksRef.doc(taskId).update(_withUpdatedAt({
+      'status': 'team_leader_review',
+      'progress': 70.0,
+      'teamLeaderReviewedAt': null,
+      'teamLeaderReviewNotes': '',
+    }));
+
+    await _recalculateProjectCompletion(task.projectId);
+    await _notify(task: task, newStatus: 'team_leader_review',
+        changedByName: userName);
+  }
+
+  Future<void> teamLeaderApproveToQc({
+    required String taskId,
+    String notes = '',
+    String userName = '',
+  }) async {
+    final task = await _getTask(taskId);
+    if (task == null) return;
+
+    await _tasksRef.doc(taskId).update(_withUpdatedAt({
+      'status': 'qc_review',
+      'progress': 80.0,
+      'teamLeaderReviewNotes': notes,
+      'teamLeaderReviewedAt': Timestamp.now(),
+      'qcReviewNotes': '',
+      'qcReviewedAt': null,
+    }));
+
+    await _recalculateProjectCompletion(task.projectId);
+    await _notify(task: task, newStatus: 'qc_review', changedByName: userName);
+  }
+
+  Future<void> teamLeaderRejectToInProgress({
+    required String taskId,
+    required String notes,
+    double? backToProgress,
+    String userName = '',
+  }) async {
+    final task = await _getTask(taskId);
+    if (task == null) return;
+
+    final resolvedProgress = _resolveProgress(
+      status: 'in_progress',
+      inProgressValue: backToProgress ?? task.progress,
+    );
+
+    await _tasksRef.doc(taskId).update(_withUpdatedAt({
+      'status': 'in_progress',
+      'progress': resolvedProgress.toDouble(),
+      'teamLeaderReviewNotes': notes,
+      'teamLeaderReviewedAt': Timestamp.now(),
+    }));
+
+    await _recalculateProjectCompletion(task.projectId);
+    await _notify(task: task, newStatus: 'in_progress',
+        changedByName: userName);
+  }
+
+  Future<void> qcApproveToClient({
+    required String taskId,
+    String notes = '',
+    String userName = '',
+  }) async {
+    final task = await _getTask(taskId);
+    if (task == null) return;
+
+    await _tasksRef.doc(taskId).update(_withUpdatedAt({
+      'status': 'client_review',
+      'progress': 90.0,
+      'qcReviewNotes': notes,
+      'qcReviewedAt': Timestamp.now(),
+      'submittedToClientAt': Timestamp.now(),
+      'clientReviewRound': task.clientReviewRound + 1,
+      'clientReviewNotes': '',
+      'clientReviewedAt': null,
+    }));
+
+    await _recalculateProjectCompletion(task.projectId);
+    await _notify(task: task, newStatus: 'client_review',
+        changedByName: userName);
+  }
+
+  Future<void> qcRejectToTeamLeader({
+    required String taskId,
+    required String notes,
+    String userName = '',
+  }) async {
+    final task = await _getTask(taskId);
+    if (task == null) return;
+
+    await _tasksRef.doc(taskId).update(_withUpdatedAt({
+      'status': 'team_leader_review',
+      'progress': 70.0,
+      'qcReviewNotes': notes,
+      'qcReviewedAt': Timestamp.now(),
+    }));
+
+    await _recalculateProjectCompletion(task.projectId);
+    await _notify(task: task, newStatus: 'team_leader_review',
+        changedByName: userName);
+  }
+
+  Future<void> clientApproveTask({
+    required String taskId,
+    String notes = '',
+    String userName = '',
+  }) async {
+    final task = await _getTask(taskId);
+    if (task == null) return;
+
+    await _tasksRef.doc(taskId).update(_withUpdatedAt({
+      'status': 'completed',
+      'progress': 100.0,
+      'clientReviewNotes': notes,
+      'clientReviewedAt': Timestamp.now(),
+    }));
+
+    await _logActivity(
+      task: task,
+      type: 'client_approve',
+      message: notes.isEmpty ? 'Client approved task' : notes,
+      userName: userName,
+      userRole: 'client',
+    );
+
+    await _recalculateProjectCompletion(task.projectId);
+    await _notify(task: task, newStatus: 'completed', changedByName: userName);
+  }
+
+  Future<void> clientRejectToQc({
+    required String taskId,
+    required String notes,
+    required String userName,
+  }) async {
+    final task = await _getTask(taskId);
+    if (task == null) return;
+
+    await _tasksRef.doc(taskId).update(_withUpdatedAt({
+      'status': 'qc_review',
+      'progress': 80.0,
+      'clientReviewNotes': notes,
+      'clientReviewedAt': Timestamp.now(),
+    }));
+
+    await _logActivity(
+      task: task,
+      type: 'client_reject',
+      message: notes.isEmpty ? 'Client rejected task' : notes,
+      userName: userName,
+      userRole: 'client',
+    );
+
+    await _recalculateProjectCompletion(task.projectId);
+    await _notify(task: task, newStatus: 'qc_review', changedByName: userName);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
   // DAILY LOGS
-  // ══════════════════════════════════════════════════════════════════════════
+  // ───────────────────────────────────────────────────────────────────────────
+
+  CollectionReference<Map<String, dynamic>> get _dailyLogsRef =>
+      _firestore.collection('daily_logs');
 
   Future<DailyLogModel> getOrCreateDailyLog({
     required String officeId,
@@ -172,7 +510,7 @@ class TaskRepository {
     required String date,
     required double totalHours,
   }) async {
-    final existing = await _dailyLogs
+    final existing = await _dailyLogsRef
         .where('officeId', isEqualTo: officeId)
         .where('employeeId', isEqualTo: employeeId)
         .where('date', isEqualTo: date)
@@ -183,21 +521,39 @@ class TaskRepository {
       return DailyLogModel.fromFirestore(existing.docs.first);
     }
 
-    final doc = _dailyLogs.doc();
-    final log = DailyLogModel(
-      id: doc.id,
-      officeId: officeId,
-      employeeId: employeeId,
-      employeeName: employeeName,
-      date: date,
-      totalHours: totalHours,
-      distributedHours: 0,
-      entries: [],
-      isSubmitted: false,
-      createdAt: DateTime.now(),
-    );
-    await doc.set(log.toFirestore());
-    return log;
+    final doc = await _dailyLogsRef.add({
+      'officeId': officeId,
+      'employeeId': employeeId,
+      'employeeName': employeeName,
+      'date': date,
+      'totalHours': totalHours,
+      'entries': const [],
+      'createdAt': Timestamp.now(),
+      'updatedAt': Timestamp.now(),
+    });
+
+    final created = await doc.get();
+    return DailyLogModel.fromFirestore(created);
+  }
+
+  Future<void> updateLogEntries({
+    required String logId,
+    required List<DailyLogEntry> entries,
+  }) async {
+    await _dailyLogsRef.doc(logId).update({
+      'entries': entries
+          .map(
+            (e) => {
+              'taskId': e.taskId,
+              'taskTitle': e.taskTitle,
+              'projectId': e.projectId,
+              'projectName': e.projectName,
+              'hours': e.hours,
+            },
+          )
+          .toList(),
+      'updatedAt': Timestamp.now(),
+    });
   }
 
   Stream<DailyLogModel?> watchDailyLog({
@@ -205,64 +561,16 @@ class TaskRepository {
     required String employeeId,
     required String date,
   }) {
-    return _dailyLogs
+    return _dailyLogsRef
         .where('officeId', isEqualTo: officeId)
         .where('employeeId', isEqualTo: employeeId)
         .where('date', isEqualTo: date)
         .limit(1)
         .snapshots()
-        .map(
-          (snap) => snap.docs.isEmpty
-              ? null
-              : DailyLogModel.fromFirestore(snap.docs.first),
-        );
-  }
-
-  Future<void> updateLogEntries({
-    required String logId,
-    required List<DailyLogEntry> entries,
-  }) async {
-    final distributed = entries.fold(0.0, (sum, e) => sum + e.hours);
-    await _dailyLogs.doc(logId).update({
-      'entries': entries.map((e) => e.toMap()).toList(),
-      'distributedHours': distributed,
-      'updatedAt': Timestamp.fromDate(DateTime.now()),
-    });
-
-    for (final entry in entries) {
-      await _updateTaskActualHours(
-        taskId: entry.taskId,
-        logId: logId,
-        hours: entry.hours,
-      );
-    }
-  }
-
-  Future<void> _updateTaskActualHours({
-    required String taskId,
-    required String logId,
-    required double hours,
-  }) async {
-    // Firestore can't query nested fields inside arrays,
-    // so we fetch all logs for the same officeId and filter in Dart
-    final taskDoc = await _tasks.doc(taskId).get();
-    final officeId =
-        (taskDoc.data() as Map<String, dynamic>?)?['officeId'] ?? '';
-    if (officeId.isEmpty) return;
-
-    final allLogs = await _dailyLogs
-        .where('officeId', isEqualTo: officeId)
-        .get();
-
-    double total = 0;
-    for (final doc in allLogs.docs) {
-      final log = DailyLogModel.fromFirestore(doc);
-      for (final entry in log.entries) {
-        if (entry.taskId == taskId) total += entry.hours;
-      }
-    }
-
-    await _tasks.doc(taskId).update({'actualHours': total});
+        .map((snapshot) {
+          if (snapshot.docs.isEmpty) return null;
+          return DailyLogModel.fromFirestore(snapshot.docs.first);
+        });
   }
 
   Stream<List<DailyLogModel>> watchMonthlyLogs({
@@ -270,13 +578,33 @@ class TaskRepository {
     required String employeeId,
     required String monthPrefix,
   }) {
-    return _dailyLogs
+    return _dailyLogsRef
         .where('officeId', isEqualTo: officeId)
         .where('employeeId', isEqualTo: employeeId)
-        .where('date', isGreaterThanOrEqualTo: '$monthPrefix-01')
-        .where('date', isLessThanOrEqualTo: '$monthPrefix-31')
         .orderBy('date', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map(DailyLogModel.fromFirestore).toList());
+        .map(
+          (snapshot) => snapshot.docs
+              .map(DailyLogModel.fromFirestore)
+              .where((log) => log.date.startsWith(monthPrefix))
+              .toList(),
+        );
+  }
+
+  Future<void> deleteAttachment({
+    required String taskId,
+    required String attachmentId,
+  }) async {
+    final firestore = FirebaseFirestore.instance;
+
+    // 🔥 حذف من Firestore
+    await firestore
+        .collection('tasks')
+        .doc(taskId)
+        .collection('attachments')
+        .doc(attachmentId)
+        .delete();
+
+    // ⚠️ مبدئيًا بدون حذف من Storage (نضيفه بعدين لو حبيت)
   }
 }

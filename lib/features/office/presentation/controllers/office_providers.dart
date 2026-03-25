@@ -1,18 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+//import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/services/local_storage_service.dart';
 import '../../data/models/office_model.dart';
 import '../../data/office_repository.dart';
+import '../../../../core/providers/shared_prefs_provider.dart';
 
 // ── Infrastructure ─────────────────────────────────────────────────────────────
 
-final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError('Override in ProviderScope');
-});
-
 final localStorageProvider = Provider<LocalStorageService>((ref) {
-  return LocalStorageService(ref.watch(sharedPreferencesProvider));
+  final prefs = ref.watch(sharedPreferencesProvider).value;
+  return LocalStorageService(prefs!);
 });
 
 final officeRepositoryProvider = Provider<OfficeRepository>((ref) {
@@ -27,7 +25,7 @@ class SelectedOfficeNotifier extends Notifier<OfficeModel?> {
     final s = ref.read(localStorageProvider);
     if (s.officeId != null && s.officeName != null) {
       return OfficeModel(
-        id:   s.officeId!,
+        id: s.officeId!,
         name: s.officeName!,
         code: s.officeCode ?? '',
         logo: s.officeLogo ?? '',
@@ -40,12 +38,14 @@ class SelectedOfficeNotifier extends Notifier<OfficeModel?> {
   /// Saves office locally but does NOT mark setup complete yet.
   Future<void> setOffice(OfficeModel office) async {
     state = office;
-    await ref.read(localStorageProvider).saveOffice(
-      id:   office.id,
-      name: office.name,
-      code: office.code,
-      logo: office.logo,
-    );
+    await ref
+        .read(localStorageProvider)
+        .saveOffice(
+          id: office.id,
+          name: office.name,
+          code: office.code,
+          logo: office.logo,
+        );
   }
 
   /// Called when user taps "Get Started" on the welcome screen.
@@ -61,5 +61,5 @@ class SelectedOfficeNotifier extends Notifier<OfficeModel?> {
 
 final selectedOfficeProvider =
     NotifierProvider<SelectedOfficeNotifier, OfficeModel?>(
-  SelectedOfficeNotifier.new,
-);
+      SelectedOfficeNotifier.new,
+    );

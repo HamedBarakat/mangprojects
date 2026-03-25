@@ -19,7 +19,7 @@ final officeStreamProvider = StreamProvider<OfficeModel?>((ref) {
       return ref.watch(officeRepositoryProvider).watchOffice(user.officeId);
     },
     loading: () => const Stream.empty(),
-    error: (_, __) => const Stream.empty(),
+    error: (_, _) => const Stream.empty(),
   );
 });
 
@@ -63,7 +63,7 @@ class SettingsScreen extends ConsumerWidget {
               // Work Hours
               officeAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (_, __) => const Text('Error loading office settings'),
+                error: (_, _) => const Text('Error loading office settings'),
                 data: (office) => _WorkHoursCard(
                   office: office,
                   officeId: user?.officeId ?? '',
@@ -117,8 +117,18 @@ class SettingsScreen extends ConsumerWidget {
 
             const SizedBox(height: 24),
 
-            // ── Logout ────────────────────────────────────────────────────────
+            // ── Account ───────────────────────────────────────────────────────
             _SectionTitle('Account'),
+            const SizedBox(height: 12),
+            _SettingsTile(
+              icon: Icons.lock_outline_rounded,
+              label: 'Change Password',
+              iconColor: Colors.orange,
+              onTap: () => showDialog(
+                context: context,
+                builder: (_) => const _ChangePasswordDialog(),
+              ),
+            ),
             const SizedBox(height: 12),
             _SettingsTile(
               icon: Icons.logout_rounded,
@@ -224,18 +234,22 @@ class _JobTitlesManagementScreenState
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-              child: const Text('Save')),
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: const Text('Save'),
+          ),
         ],
       ),
     );
     if (result != null && result.isNotEmpty) {
       setState(() {
-        _groups[groupIdx].entries[entryIdx] =
-            _JobTitleEntry(key: entry.key, label: result);
+        _groups[groupIdx].entries[entryIdx] = _JobTitleEntry(
+          key: entry.key,
+          label: result,
+        );
       });
     }
   }
@@ -272,11 +286,13 @@ class _JobTitlesManagementScreenState
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Add')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Add'),
+          ),
         ],
       ),
     );
@@ -284,10 +300,12 @@ class _JobTitlesManagementScreenState
         labelCtrl.text.trim().isNotEmpty &&
         keyCtrl.text.trim().isNotEmpty) {
       setState(() {
-        _groups[groupIdx].entries.add(_JobTitleEntry(
-          key: keyCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
-          label: labelCtrl.text.trim(),
-        ));
+        _groups[groupIdx].entries.add(
+          _JobTitleEntry(
+            key: keyCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
+            label: labelCtrl.text.trim(),
+          ),
+        );
       });
     }
   }
@@ -309,11 +327,13 @@ class _JobTitlesManagementScreenState
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-              child: const Text('Add')),
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: const Text('Add'),
+          ),
         ],
       ),
     );
@@ -334,12 +354,14 @@ class _JobTitlesManagementScreenState
         content: Text('Delete "$label"?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete')),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -377,9 +399,9 @@ class _JobTitlesManagementScreenState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -409,8 +431,10 @@ class _JobTitlesManagementScreenState
         appBar: AppBar(
           backgroundColor: cs.surface,
           elevation: 0,
-          title: const Text('Manage Job Titles',
-              style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const Text(
+            'Manage Job Titles',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -459,8 +483,9 @@ class _JobTitlesManagementScreenState
                   child: Text(
                     'Customize job titles for your office. Press Save to apply changes.',
                     style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurface.withOpacity(0.7)),
+                      fontSize: 12,
+                      color: cs.onSurface.withOpacity(0.7),
+                    ),
                   ),
                 ),
               ],
@@ -469,10 +494,7 @@ class _JobTitlesManagementScreenState
 
           // Groups
           for (int gi = 0; gi < _groups.length; gi++) ...[
-            _GroupHeader(
-              title: _groups[gi].title,
-              onAdd: () => _addEntry(gi),
-            ),
+            _GroupHeader(title: _groups[gi].title, onAdd: () => _addEntry(gi)),
             const SizedBox(height: 8),
             for (int ei = 0; ei < _groups[gi].entries.length; ei++)
               _JobTitleTile(
@@ -579,8 +601,7 @@ class _JobTitleTile extends StatelessWidget {
         border: Border.all(color: cs.outlineVariant.withOpacity(0.4)),
       ),
       child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
         leading: Icon(
           Icons.work_outline_rounded,
           color: cs.primary.withOpacity(0.6),
@@ -592,23 +613,26 @@ class _JobTitleTile extends StatelessWidget {
         ),
         subtitle: Text(
           entry.key,
-          style: TextStyle(
-            fontSize: 11,
-            color: cs.onSurface.withOpacity(0.4),
-          ),
+          style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.4)),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: Icon(Icons.edit_outlined,
-                  size: 18, color: cs.primary.withOpacity(0.7)),
+              icon: Icon(
+                Icons.edit_outlined,
+                size: 18,
+                color: cs.primary.withOpacity(0.7),
+              ),
               onPressed: onEdit,
               tooltip: 'Edit',
             ),
             IconButton(
-              icon: const Icon(Icons.delete_outline_rounded,
-                  size: 18, color: Colors.red),
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                size: 18,
+                color: Colors.red,
+              ),
               onPressed: onDelete,
               tooltip: 'Delete',
             ),
@@ -630,7 +654,9 @@ class _ProfileCard extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
 
     // ✅ custom job titles من الـ office settings
-    final customTitles = ref.watch(officeSettingsProvider).valueOrNull
+    final customTitles = ref
+        .watch(officeSettingsProvider)
+        .valueOrNull
         ?.effectiveJobTitles;
     final titleLabel = user?.jobTitleLabelFrom(customTitles) ?? '—';
 
@@ -674,7 +700,10 @@ class _ProfileCard extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: _roleColor(user?.role, cs).withOpacity(0.15),
                     borderRadius: BorderRadius.circular(20),
@@ -698,14 +727,22 @@ class _ProfileCard extends ConsumerWidget {
 
   Color _roleColor(String? role, ColorScheme cs) {
     switch (role) {
-      case 'admin':          return Colors.deepPurple;
-      case 'engineer':       return cs.primary;
-      case 'team_leader':    return Colors.teal;
-      case 'reviewer':       return Colors.indigo;
-      case 'management':     return Colors.brown;
-      case 'administration': return Colors.blueGrey;
-      case 'client':         return Colors.orange;
-      default:               return Colors.grey;
+      case 'admin':
+        return Colors.deepPurple;
+      case 'engineer':
+        return cs.primary;
+      case 'team_leader':
+        return Colors.teal;
+      case 'reviewer':
+        return Colors.indigo;
+      case 'management':
+        return Colors.brown;
+      case 'administration':
+        return Colors.blueGrey;
+      case 'client':
+        return Colors.orange;
+      default:
+        return Colors.grey;
     }
   }
 }
@@ -781,7 +818,11 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
                   color: cs.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.schedule_rounded, color: cs.primary, size: 20),
+                child: Icon(
+                  Icons.schedule_rounded,
+                  color: cs.primary,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               Column(
@@ -789,8 +830,7 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
                 children: [
                   const Text(
                     'Work Hours',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                   Text(
                     '${workHours.toStringAsFixed(1)} hrs/day',
@@ -884,7 +924,9 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
 
     setState(() => _saving = true);
     try {
-      await ref.read(officeRepositoryProvider).updateWorkHours(
+      await ref
+          .read(officeRepositoryProvider)
+          .updateWorkHours(
             officeId: widget.officeId,
             workStartTime: _formatTime(_startTime),
             workEndTime: _formatTime(_endTime),
@@ -896,8 +938,9 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -1002,6 +1045,224 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
+// ── Change Password Dialog ────────────────────────────────────────────────────
+
+class _ChangePasswordDialog extends ConsumerStatefulWidget {
+  const _ChangePasswordDialog();
+
+  @override
+  ConsumerState<_ChangePasswordDialog> createState() =>
+      _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _currentCtrl = TextEditingController();
+  final _newCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _currentCtrl.dispose();
+    _newCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _changePassword() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('Not logged in');
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: _currentCtrl.text.trim(),
+      );
+      await user.reauthenticateWithCredential(credential);
+      await user.updatePassword(_newCtrl.text.trim());
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password changed successfully ✓'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _errorMessage = switch (e.code) {
+          'wrong-password' => 'Current password is incorrect.',
+          'weak-password' => 'New password is too weak (min 6 chars).',
+          'requires-recent-login' => 'Please logout and login again first.',
+          _ => 'Error: ${e.message}',
+        };
+      });
+    } catch (e) {
+      setState(() => _errorMessage = 'Something went wrong.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.lock_outline_rounded, color: Colors.orange, size: 20),
+          SizedBox(width: 8),
+          Text('Change Password'),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _currentCtrl,
+                obscureText: _obscureCurrent,
+                decoration: InputDecoration(
+                  labelText: 'Current Password',
+                  prefixIcon: const Icon(Icons.lock_outline_rounded),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureCurrent
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureCurrent = !_obscureCurrent),
+                  ),
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _newCtrl,
+                obscureText: _obscureNew,
+                decoration: InputDecoration(
+                  labelText: 'New Password',
+                  prefixIcon: const Icon(Icons.lock_rounded),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureNew
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                    onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                  ),
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Required';
+                  if (v.length < 6) return 'Minimum 6 characters';
+                  if (v == _currentCtrl.text)
+                    return 'Must be different from current';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _confirmCtrl,
+                obscureText: _obscureConfirm,
+                decoration: InputDecoration(
+                  labelText: 'Confirm New Password',
+                  prefixIcon: const Icon(Icons.lock_reset_rounded),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureConfirm
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureConfirm = !_obscureConfirm),
+                  ),
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Required';
+                  if (v != _newCtrl.text) return 'Passwords do not match';
+                  return null;
+                },
+              ),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cs.errorContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.error_outline_rounded,
+                        color: cs.error,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: TextStyle(
+                            color: cs.onErrorContainer,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isLoading ? null : _changePassword,
+          style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Change'),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _SettingsTile extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1050,7 +1311,7 @@ class _SettingsTile extends StatelessWidget {
                 ),
               ),
             ),
-            if (trailing != null) trailing!,
+            ?trailing,
             if (onTap != null && trailing == null)
               Icon(
                 Icons.chevron_right_rounded,

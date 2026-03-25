@@ -6,10 +6,24 @@ import '../../../../features/home/data/models/user_model.dart';
 import '../controllers/employee_providers.dart';
 import '../../../../features/home/presentation/controllers/home_providers.dart';
 import '../../../office/presentation/controllers/office_settings_providers.dart';
+import '../../../client/data/models/client_model.dart';
+import '../../../client/data/client_repository.dart';
 
 class AddEditEmployeeScreen extends ConsumerStatefulWidget {
   final EmployeeModel? employee;
-  const AddEditEmployeeScreen({super.key, this.employee});
+  final String? initialRole;
+  final bool lockRole;
+  final String? initialLinkedClientId;
+  final String? screenTitle;
+
+  const AddEditEmployeeScreen({
+    super.key,
+    this.employee,
+    this.initialRole,
+    this.lockRole = false,
+    this.initialLinkedClientId,
+    this.screenTitle,
+  });
 
   @override
   ConsumerState<AddEditEmployeeScreen> createState() =>
@@ -18,8 +32,10 @@ class AddEditEmployeeScreen extends ConsumerStatefulWidget {
 
 class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
   final _formKey = GlobalKey<FormState>();
+
   bool _isLoading = false;
   String? _errorMessage;
+  String? _linkedClientId;
 
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
@@ -39,11 +55,34 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
   DateTime _joinDate = DateTime.now();
 
   bool get _isEditing => widget.employee != null;
+  bool get _isClientMode =>
+      (widget.initialRole == 'client') || (_role == 'client');
+
+  String get _resolvedTitle {
+    if (widget.screenTitle != null && widget.screenTitle!.trim().isNotEmpty) {
+      return widget.screenTitle!.trim();
+    }
+
+    if (_isClientMode) {
+      return _isEditing ? 'Edit Client Account' : 'Add Client Account';
+    }
+
+    return _isEditing ? 'Edit Employee' : 'Add Employee';
+  }
+
+  String get _resolvedSubmitLabel {
+    if (_isClientMode) {
+      return _isEditing ? 'Update Client Account' : 'Add Client Account';
+    }
+
+    return _isEditing ? 'Update Employee' : 'Add Employee';
+  }
 
   @override
   void initState() {
     super.initState();
     final e = widget.employee;
+
     _nameController = TextEditingController(text: e?.name ?? '');
     _emailController = TextEditingController(text: e?.email ?? '');
     _passwordController = TextEditingController();
@@ -53,7 +92,9 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
       text: e?.specialization ?? '',
     );
     _graduationYearController = TextEditingController(
-      text: e?.graduationYear != 0 ? e?.graduationYear.toString() ?? '' : '',
+      text: e != null && e.graduationYear != 0
+          ? e.graduationYear.toString()
+          : '',
     );
     _notesController = TextEditingController(text: e?.notes ?? '');
     _employeeCodeController = TextEditingController(
@@ -67,6 +108,22 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
       _joinDate = e.joinDate;
       _jobTitleKey = e.jobTitle;
       _adminFlag = e.adminFlag;
+      _linkedClientId = e.linkedClientId;
+    } else {
+      _role = widget.initialRole ?? 'engineer';
+      _linkedClientId = widget.initialLinkedClientId;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final user = ref.read(currentUserProvider).value;
+        if (user == null) return;
+
+        final repo = ref.read(employeeRepositoryProvider);
+        final code = await repo.generateEmployeeCode(user.officeId);
+
+        if (mounted && _employeeCodeController.text.isEmpty) {
+          setState(() => _employeeCodeController.text = code);
+        }
+      });
     }
   }
 
@@ -89,11 +146,19 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
       setState(() => _errorMessage = 'Password is required');
       return;
     }
+
     if (!_isEditing && _passwordController.text.trim().length < 6) {
       setState(() => _errorMessage = 'Password must be at least 6 characters');
       return;
     }
+
     if (!_formKey.currentState!.validate()) return;
+
+    if (_role == 'client' &&
+        (_linkedClientId == null || _linkedClientId!.isEmpty)) {
+      setState(() => _errorMessage = 'Please select the linked client record');
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -122,6 +187,7 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
           'status': _status,
           'isActive': _status == 'active',
           'notes': _notesController.text.trim(),
+          'linkedClientId': _role == 'client' ? _linkedClientId : null,
         });
       } else {
         await repo.addEmployee(
@@ -141,10 +207,14 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
               int.tryParse(_graduationYearController.text.trim()) ?? 0,
           joinDate: _joinDate,
           notes: _notesController.text.trim(),
+          linkedClientId: _role == 'client' ? _linkedClientId : null,
         );
       }
 
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ref.invalidate(employeeCodeProvider);
+        Navigator.pop(context);
+      }
     } catch (e) {
       setState(
         () => _errorMessage = e.toString().replaceAll('Exception: ', ''),
@@ -158,21 +228,13 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    if (!_isEditing && _employeeCodeController.text.isEmpty) {
-      ref.watch(employeeCodeProvider).whenData((code) {
-        if (_employeeCodeController.text.isEmpty) {
-          _employeeCodeController.text = code;
-        }
-      });
-    }
-
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
         backgroundColor: cs.surface,
         elevation: 0,
         title: Text(
-          _isEditing ? 'Edit Employee' : 'Add Employee',
+          _resolvedTitle,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
@@ -181,7 +243,6 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // ── Error ────────────────────────────────────────────────────────
             if (_errorMessage != null) ...[
               Container(
                 padding: const EdgeInsets.all(12),
@@ -197,13 +258,12 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
               const SizedBox(height: 16),
             ],
 
-            // ── Basic Info ────────────────────────────────────────────────────
             _SectionTitle(title: 'Basic Information'),
             const SizedBox(height: 12),
 
             _buildField(
               controller: _employeeCodeController,
-              label: 'Employee Code',
+              label: _isClientMode ? 'Account Code' : 'Employee Code',
               icon: Icons.badge_outlined,
               readOnly: _isEditing,
               validator: (v) => v == null || v.isEmpty ? 'Required' : null,
@@ -262,56 +322,75 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ── Job Info ──────────────────────────────────────────────────────
-            _SectionTitle(title: 'Job Information'),
+            _SectionTitle(
+              title: _isClientMode ? 'Account Information' : 'Job Information',
+            ),
             const SizedBox(height: 12),
 
-            // Job Title — grouped dropdown
             _GroupedJobTitleDropdown(
               value: _jobTitleKey.isEmpty ? null : _jobTitleKey,
               onChanged: (v) => setState(() => _jobTitleKey = v ?? ''),
             ),
             const SizedBox(height: 12),
 
-            // Role
-            _RoleDropdown(
-              value: _role,
-              onChanged: (v) => setState(() => _role = v!),
-            ),
+            if (widget.lockRole)
+              _LockedRoleField(value: _role)
+            else
+              _RoleDropdown(
+                value: _role,
+                onChanged: (v) {
+                  if (v == null) return;
+                  setState(() {
+                    _role = v;
+                    if (_role != 'client') {
+                      _linkedClientId = null;
+                    }
+                  });
+                },
+              ),
             const SizedBox(height: 8),
+
             _RoleInfoCard(role: _role),
             const SizedBox(height: 12),
 
-            // Admin Flag
+            if (_role == 'client') ...[
+              _LinkedClientDropdown(
+                selectedClientId: _linkedClientId,
+                onChanged: (v) => setState(() => _linkedClientId = v),
+                enabled: !widget.lockRole || _isEditing,
+              ),
+              const SizedBox(height: 12),
+            ],
+
             _AdminToggle(
               value: _adminFlag,
               onChanged: (v) => setState(() => _adminFlag = v),
             ),
             const SizedBox(height: 12),
 
-            // Department
             Consumer(
               builder: (context, ref, _) {
                 final departments = ref.watch(departmentsProvider);
                 final items = {for (var d in departments) d: d};
+
                 if (_department.isEmpty && departments.isNotEmpty) {
                   _department = departments.first;
                 }
                 if (!items.containsKey(_department) && departments.isNotEmpty) {
                   _department = departments.first;
                 }
+
                 return _buildDropdown(
                   label: 'Department',
                   value: _department.isNotEmpty ? _department : null,
                   icon: Icons.category_outlined,
                   items: items,
-                  onChanged: (v) => setState(() => _department = v!),
+                  onChanged: (v) => setState(() => _department = v ?? ''),
                 );
               },
             ),
             const SizedBox(height: 12),
 
-            // Status
             _buildDropdown(
               label: 'Status',
               value: _status,
@@ -321,7 +400,7 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
                 'suspended': 'Suspended',
                 'resigned': 'Resigned',
               },
-              onChanged: (v) => setState(() => _status = v!),
+              onChanged: (v) => setState(() => _status = v ?? 'active'),
             ),
             const SizedBox(height: 12),
 
@@ -332,7 +411,6 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ── Academic Info ─────────────────────────────────────────────────
             _SectionTitle(title: 'Academic Information'),
             const SizedBox(height: 12),
 
@@ -351,7 +429,6 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ── Notes ─────────────────────────────────────────────────────────
             _SectionTitle(title: 'Notes'),
             const SizedBox(height: 12),
 
@@ -363,7 +440,6 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
             ),
             const SizedBox(height: 32),
 
-            // Save Button
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -384,7 +460,7 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
                         ),
                       )
                     : Text(
-                        _isEditing ? 'Update Employee' : 'Add Employee',
+                        _resolvedSubmitLabel,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -410,6 +486,7 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
     String? Function(String?)? validator,
   }) {
     final cs = Theme.of(context).colorScheme;
+
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
@@ -452,8 +529,9 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
     required void Function(String?) onChanged,
   }) {
     final cs = Theme.of(context).colorScheme;
+
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
@@ -471,13 +549,137 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
       ),
       borderRadius: BorderRadius.circular(14),
       items: items.entries
-          .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+          .map(
+            (e) => DropdownMenuItem<String>(value: e.key, child: Text(e.value)),
+          )
           .toList(),
     );
   }
 }
 
-// ── Role Dropdown ─────────────────────────────────────────────────────────────
+class _LockedRoleField extends StatelessWidget {
+  final String value;
+
+  const _LockedRoleField({required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    String label;
+    switch (value) {
+      case 'engineer':
+        label = 'Engineer';
+        break;
+      case 'team_leader':
+        label = 'Team Leader';
+        break;
+      case 'reviewer':
+        label = 'Reviewer';
+        break;
+      case 'management':
+        label = 'Management';
+        break;
+      case 'administration':
+        label = 'Administration';
+        break;
+      case 'client':
+        label = 'Client';
+        break;
+      default:
+        label = value;
+    }
+
+    return TextFormField(
+      initialValue: label,
+      readOnly: true,
+      decoration: InputDecoration(
+        labelText: 'System Role (Permissions)',
+        prefixIcon: Icon(
+          Icons.admin_panel_settings_outlined,
+          color: cs.primary,
+        ),
+        filled: true,
+        fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.65),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+}
+
+class _LinkedClientDropdown extends ConsumerWidget {
+  final String? selectedClientId;
+  final ValueChanged<String?> onChanged;
+  final bool enabled;
+
+  const _LinkedClientDropdown({
+    required this.selectedClientId,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final currentUser = ref.watch(currentUserProvider).value;
+
+    if (currentUser == null) {
+      return const SizedBox.shrink();
+    }
+
+    final clientsStream = ClientRepository(
+      officeId: currentUser.officeId,
+    ).watchClients();
+
+    return StreamBuilder<List<ClientModel>>(
+      stream: clientsStream,
+      builder: (context, snapshot) {
+        final clients = snapshot.data ?? [];
+        final selectedIsValid = clients.any(
+          (client) => client.id == selectedClientId,
+        );
+
+        return DropdownButtonFormField<String>(
+          initialValue: selectedIsValid ? selectedClientId : null,
+          onChanged: enabled ? onChanged : null,
+          decoration: InputDecoration(
+            labelText: 'Linked Client',
+            prefixIcon: Icon(Icons.business_outlined, color: cs.primary),
+            filled: true,
+            fillColor: enabled
+                ? cs.surfaceContainerHighest
+                : cs.surfaceContainerHighest.withValues(alpha: 0.65),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: cs.primary, width: 2),
+            ),
+          ),
+          items: clients
+              .map(
+                (client) => DropdownMenuItem<String>(
+                  value: client.id,
+                  child: Text(client.name),
+                ),
+              )
+              .toList(),
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please select a client';
+            }
+            return null;
+          },
+        );
+      },
+    );
+  }
+}
 
 class _RoleDropdown extends StatelessWidget {
   final String value;
@@ -485,68 +687,77 @@ class _RoleDropdown extends StatelessWidget {
   const _RoleDropdown({required this.value, required this.onChanged});
 
   static const _roleLabels = {
-    'engineer':       'Engineer',
-    'team_leader':    'Team Leader',
-    'reviewer':       'Reviewer',
-    'management':     'Management',
+    'engineer': 'Engineer',
+    'team_leader': 'Team Leader',
+    'reviewer': 'Reviewer',
+    'dc': 'Document Controller',
+    'management': 'Management',
     'administration': 'Administration',
-    'client':         'Client',
+    'client': 'Client',
   };
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
-    // ── Build items list (headers + roles) ────────────────────────────────────
     final items = <DropdownMenuItem<String>>[];
 
     void addHeader(String label) {
-      items.add(DropdownMenuItem<String>(
-        enabled: false,
-        value: '__header__$label',
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            color: cs.primary,
+      items.add(
+        DropdownMenuItem<String>(
+          enabled: false,
+          value: '__header__$label',
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: cs.primary,
+            ),
           ),
         ),
-      ));
+      );
     }
 
     void addRole(String key) {
-      items.add(DropdownMenuItem<String>(
-        value: key,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Text(_roleLabels[key]!, style: const TextStyle(fontSize: 14)),
+      items.add(
+        DropdownMenuItem<String>(
+          value: key,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Text(
+              _roleLabels[key]!,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
         ),
-      ));
+      );
     }
 
     addHeader('Engineering Roles');
     addRole('engineer');
     addRole('team_leader');
     addRole('reviewer');
+    addRole('dc');
     addHeader('Office Roles');
     addRole('management');
     addRole('administration');
     addHeader('Other');
     addRole('client');
 
-    // selectedItemBuilder: نفس عدد الـ items بالظبط (9 items = 3 headers + 6 roles)
     final allItemValues = items.map((i) => i.value!).toList();
 
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       isExpanded: true,
       onChanged: (v) {
         if (v != null && !v.startsWith('__header__')) onChanged(v);
       },
       decoration: InputDecoration(
         labelText: 'System Role (Permissions)',
-        prefixIcon: Icon(Icons.admin_panel_settings_outlined, color: cs.primary),
+        prefixIcon: Icon(
+          Icons.admin_panel_settings_outlined,
+          color: cs.primary,
+        ),
         filled: true,
         fillColor: cs.surfaceContainerHighest,
         border: OutlineInputBorder(
@@ -560,10 +771,9 @@ class _RoleDropdown extends StatelessWidget {
       ),
       borderRadius: BorderRadius.circular(14),
       items: items,
-      // selectedItemBuilder: نبني widget لكل item في نفس ترتيب الـ items list
       selectedItemBuilder: (context) {
         return allItemValues.map((v) {
-          final label = _roleLabels[v] ?? ''; // headers ترجع ''
+          final label = _roleLabels[v] ?? '';
           return Align(
             alignment: Alignment.centerLeft,
             child: Text(label, style: const TextStyle(fontSize: 14)),
@@ -574,9 +784,6 @@ class _RoleDropdown extends StatelessWidget {
   }
 }
 
-// ── Role Info Card ────────────────────────────────────────────────────────────
-// Shows a description under the role dropdown
-
 class _RoleInfoCard extends StatelessWidget {
   final String role;
   const _RoleInfoCard({required this.role});
@@ -584,8 +791,8 @@ class _RoleInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     final info = _roleInfo(role);
+
     if (info == null) return const SizedBox.shrink();
 
     return Container(
@@ -602,7 +809,10 @@ class _RoleInfoCard extends StatelessWidget {
           Expanded(
             child: Text(
               info.$2,
-              style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.7)),
+              style: TextStyle(
+                fontSize: 12,
+                color: cs.onSurface.withOpacity(0.7),
+              ),
             ),
           ),
         ],
@@ -613,26 +823,39 @@ class _RoleInfoCard extends StatelessWidget {
   (IconData, String)? _roleInfo(String role) {
     switch (role) {
       case 'engineer':
-        return (Icons.engineering_outlined, 'Can view & work on assigned tasks.');
+        return (
+          Icons.engineering_outlined,
+          'Can view & work on assigned tasks.',
+        );
       case 'team_leader':
         return (Icons.group_outlined, 'Can assign & manage team tasks.');
       case 'reviewer':
         return (Icons.rate_review_outlined, 'Can review & approve tasks.');
+      case 'dc':
+        return (
+          Icons.folder_copy_outlined,
+          'Document Controller — sees all client_review tasks, sends docs to client.',
+        );
       case 'management':
-        return (Icons.business_center_outlined,
-            'Senior management — same permissions as Reviewer. Can be upgraded to Admin.');
+        return (
+          Icons.business_center_outlined,
+          'Senior management — same permissions as Reviewer. Can be upgraded to Admin.',
+        );
       case 'administration':
-        return (Icons.badge_outlined,
-            'Non-engineering staff — attendance & check-in/out only.');
+        return (
+          Icons.badge_outlined,
+          'Non-engineering staff — attendance & check-in/out only.',
+        );
       case 'client':
-        return (Icons.person_outline_rounded, 'Can view their projects only.');
+        return (
+          Icons.person_outline_rounded,
+          'Client login account linked to one client record.',
+        );
       default:
         return null;
     }
   }
 }
-
-// ── Admin Toggle ──────────────────────────────────────────────────────────────
 
 class _AdminToggle extends StatelessWidget {
   final bool value;
@@ -642,6 +865,7 @@ class _AdminToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -689,7 +913,7 @@ class _AdminToggle extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: Colors.deepPurple,
+            activeThumbColor: Colors.deepPurple,
           ),
         ],
       ),
@@ -697,14 +921,10 @@ class _AdminToggle extends StatelessWidget {
   }
 }
 
-// ── Grouped Job Title Dropdown ────────────────────────────────────────────────
-
-// ── Grouped Job Title Dropdown ────────────────────────────────────────────────
-// يقرأ من officeSettingsProvider (Firestore) — لو مفيش custom titles يرجع defaults
-
 class _GroupedJobTitleDropdown extends ConsumerWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
+
   const _GroupedJobTitleDropdown({
     required this.value,
     required this.onChanged,
@@ -714,24 +934,22 @@ class _GroupedJobTitleDropdown extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
 
-    // ✅ قرأ الـ groups من الـ office settings (custom أو defaults)
     final settingsAsync = ref.watch(officeSettingsProvider);
     final groups = settingsAsync.when(
       data: (settings) => settings.effectiveJobTitleGroups,
       loading: () => JobTitles.groups,
-      error: (_, __) => JobTitles.groups,
+      error: (_, _) => JobTitles.groups,
     );
 
-    // تأكد إن الـ value الحالية موجودة في الـ groups المتاحة
     final allKeys = {
       for (final g in groups)
-        for (final key in g.titles.keys) key
+        for (final key in g.titles.keys) key,
     };
+
     final safeValue = (value != null && allKeys.contains(value)) ? value : null;
 
     final items = <DropdownMenuItem<String>>[];
     for (final group in groups) {
-      // Group header (non-selectable)
       items.add(
         DropdownMenuItem<String>(
           enabled: false,
@@ -749,7 +967,7 @@ class _GroupedJobTitleDropdown extends ConsumerWidget {
           ),
         ),
       );
-      // Title items
+
       for (final entry in group.titles.entries) {
         items.add(
           DropdownMenuItem<String>(
@@ -763,15 +981,13 @@ class _GroupedJobTitleDropdown extends ConsumerWidget {
       }
     }
 
-    // flat map: key → label (للـ selectedItemBuilder)
     final allTitles = <String, String>{
       for (final g in groups)
         for (final e in g.titles.entries) e.key: e.value,
     };
-    // كل الـ item values بالترتيب (headers + titles)
+
     final allItemValues = items.map((i) => i.value!).toList();
 
-    // Loading state
     if (settingsAsync.isLoading) {
       return Container(
         height: 56,
@@ -784,14 +1000,17 @@ class _GroupedJobTitleDropdown extends ConsumerWidget {
           children: [
             Icon(Icons.work_outline_rounded, color: cs.primary),
             const SizedBox(width: 12),
-            Text('Loading...', style: TextStyle(color: cs.onSurface.withOpacity(0.5))),
+            Text(
+              'Loading...',
+              style: TextStyle(color: cs.onSurface.withOpacity(0.5)),
+            ),
           ],
         ),
       );
     }
 
     return DropdownButtonFormField<String>(
-      value: safeValue,
+      initialValue: safeValue,
       isExpanded: true,
       onChanged: (v) {
         if (v != null && !v.startsWith('__header__')) onChanged(v);
@@ -812,10 +1031,9 @@ class _GroupedJobTitleDropdown extends ConsumerWidget {
       ),
       borderRadius: BorderRadius.circular(14),
       items: items,
-      // selectedItemBuilder: نفس ترتيب الـ items بالظبط
       selectedItemBuilder: (context) {
         return allItemValues.map((v) {
-          final label = allTitles[v] ?? ''; // headers ترجع ''
+          final label = allTitles[v] ?? '';
           return Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -830,8 +1048,6 @@ class _GroupedJobTitleDropdown extends ConsumerWidget {
   }
 }
 
-// ── Reusable Widgets ──────────────────────────────────────────────────────────
-
 class _SectionTitle extends StatelessWidget {
   final String title;
   const _SectionTitle({required this.title});
@@ -839,6 +1055,7 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
     return Row(
       children: [
         Container(
@@ -867,6 +1084,7 @@ class _DateField extends StatelessWidget {
   final String label;
   final DateTime date;
   final void Function(DateTime) onChanged;
+
   const _DateField({
     required this.label,
     required this.date,
@@ -876,6 +1094,7 @@ class _DateField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
     return InkWell(
       onTap: () async {
         final picked = await showDatePicker(

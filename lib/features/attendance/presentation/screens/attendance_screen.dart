@@ -17,7 +17,8 @@ class AttendanceScreen extends ConsumerWidget {
     final userAsync = ref.watch(currentUserProvider);
     final user = userAsync.value;
     final isAdmin = user?.isAdmin ?? false;
-    final canSeeAll = isAdmin || (user?.isManagement ?? false); // management يشوف كل الحضور
+    final canSeeAll =
+        isAdmin || (user?.isManagement ?? false); // management يشوف كل الحضور
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -216,7 +217,7 @@ class _TodayCardState extends ConsumerState<_TodayCard> {
               children: [
                 _TimeInfo(
                   label: 'Check In',
-                  time: _formatTime(record!.checkIn),
+                  time: _formatTime(record.checkIn),
                   icon: Icons.login_rounded,
                 ),
                 if (isCheckedOut) ...[
@@ -247,7 +248,7 @@ class _TodayCardState extends ConsumerState<_TodayCard> {
             ),
 
           const SizedBox(height: 12),
-          if (isCheckedIn) _StatusChip(status: record!.status),
+          if (isCheckedIn) _StatusChip(status: record.status),
           const SizedBox(height: 16),
 
           // Action button
@@ -265,7 +266,7 @@ class _TodayCardState extends ConsumerState<_TodayCard> {
               label: 'Check Out',
               icon: Icons.logout_rounded,
               filled: false,
-              onTap: () => _doCheckOut(user, record!.id),
+              onTap: () => _doCheckOut(user, record.id),
             )
           else
             Row(
@@ -437,7 +438,7 @@ class _TodayAllSection extends ConsumerWidget {
         const SizedBox(height: 12),
         todayAllAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, __) => const Text('Error loading'),
+          error: (_, _) => const Text('Error loading'),
           data: (records) {
             if (records.isEmpty) {
               return Container(
@@ -458,7 +459,7 @@ class _TodayAllSection extends ConsumerWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: records.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (_, i) => _AttendanceRecordTile(record: records[i]),
             );
           },
@@ -478,7 +479,7 @@ class _MonthlyStatsRow extends ConsumerWidget {
 
     return statsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
       data: (stats) => Row(
         children: [
           Expanded(
@@ -526,7 +527,7 @@ class _MonthlyRecordsList extends ConsumerWidget {
 
     return recordsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => const Text('Error loading records'),
+      error: (_, _) => const Text('Error loading records'),
       data: (records) {
         if (records.isEmpty) {
           return Container(
@@ -556,7 +557,7 @@ class _MonthlyRecordsList extends ConsumerWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: records.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
           itemBuilder: (_, i) => _AttendanceRecordTile(record: records[i]),
         );
       },
@@ -693,7 +694,7 @@ class _OvertimeRequestsSheet extends ConsumerWidget {
           Expanded(
             child: pendingAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, __) => const Center(child: Text('Error loading')),
+              error: (_, _) => const Center(child: Text('Error loading')),
               data: (requests) {
                 if (requests.isEmpty) {
                   return Center(
@@ -707,7 +708,7 @@ class _OvertimeRequestsSheet extends ConsumerWidget {
                   controller: controller,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: requests.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (_, i) {
                     final req = requests[i];
                     return Container(
