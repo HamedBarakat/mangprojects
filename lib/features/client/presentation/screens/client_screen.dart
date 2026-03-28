@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mang_projects/features/projects/presentation/screens/client_review_screen.dart';
 
 import '../../../../features/home/presentation/controllers/home_providers.dart';
-import 'client_project_detail_screen.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CLIENT PROJECTS PROVIDER

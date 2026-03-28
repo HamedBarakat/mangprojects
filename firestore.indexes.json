@@ -284,44 +284,50 @@
       ]
     },
     {
-      "collectionGroup": "notifications",
+      "collectionGroup": "comments",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "recipientId",
+          "fieldPath": "taskId",
           "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "notifications",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "recipientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "isRead",
           "order": "ASCENDING"
         }
       ]
     },
     {
-      "collectionGroup": "notifications",
+      "collectionGroup": "attachments",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "officeId",
+          "fieldPath": "taskId",
           "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESCENDING"
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "comments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "attachments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
         }
       ]
     }

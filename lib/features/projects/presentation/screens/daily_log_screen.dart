@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../home/presentation/controllers/home_providers.dart';
 import '../../../projects/data/models/daily_log_model.dart';
 import '../../../projects/data/models/task_model.dart';
-import '../../../projects/data/task_repository.dart';
 import '../../../projects/presentation/controllers/task_providers.dart';
 import '../../../attendance/presentation/controllers/attendance_providers.dart';
 

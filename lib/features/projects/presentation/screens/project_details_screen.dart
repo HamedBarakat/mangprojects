@@ -1,7 +1,8 @@
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle, Clipboard, ClipboardData;
+import 'package:flutter/services.dart'
+    show rootBundle, Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pdf/pdf.dart';
@@ -244,8 +245,14 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen>
                     tabs: const [
                       Tab(text: 'Overview'),
                       Tab(text: 'Tasks'),
-                      Tab(icon: Icon(Icons.comment_outlined, size: 16), text: 'My Notes'),
-                      Tab(icon: Icon(Icons.bar_chart_rounded, size: 16), text: 'Report'),
+                      Tab(
+                        icon: Icon(Icons.comment_outlined, size: 16),
+                        text: 'My Notes',
+                      ),
+                      Tab(
+                        icon: Icon(Icons.bar_chart_rounded, size: 16),
+                        text: 'Report',
+                      ),
                     ],
                   ),
                 ],
@@ -263,10 +270,7 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen>
                   currentUser: user,
                 ),
                 _NotesTab(projectId: project.id),
-                _ReportTab(
-                  projectId: project.id,
-                  projectName: project.name,
-                ),
+                _ReportTab(projectId: project.id, projectName: project.name),
               ],
             ),
           ),
@@ -435,10 +439,12 @@ class _TasksTab extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
             children: [
               statsAsync.when(
-              data: (stats) => stats.isNotEmpty ? _StatsRow(stats: stats) : const SizedBox.shrink(),
-              loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
-            ),
+                data: (stats) => stats.isNotEmpty
+                    ? _StatsRow(stats: stats)
+                    : const SizedBox.shrink(),
+                loading: () => const SizedBox.shrink(),
+                error: (_, _) => const SizedBox.shrink(),
+              ),
               const SizedBox(height: 16),
               ...grouped.entries.map(
                 (entry) => Column(
@@ -862,6 +868,8 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
   late DateTime _startDate;
   late DateTime _endDate;
   bool _saving = false;
+  // منع تعبئة الـ discipline أكثر من مرة
+  bool _disciplineInitialized = false;
   String? _errorMessage;
 
   bool get _isEdit => widget.task != null;
@@ -886,13 +894,18 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
         : null;
     _selectedReviewerName = t?.reviewerName ?? '';
 
-    // ── Auto-fill QC from project when creating a new task ────────────────
+    // ── Auto-fill defaults when creating a new task ───────────────────────
     if (t == null) {
       final project = widget.project;
+
+      // Auto-fill QC Reviewer from project settings
       if (project.qcId != null && project.qcId!.isNotEmpty) {
         _selectedReviewer = project.qcId;
         _selectedReviewerName = project.qcName ?? '';
       }
+
+      // Auto-fill Discipline from current user's department
+      // Will be refined in didChangeDependencies once providers are ready
     }
 
     if (t != null) {
@@ -934,6 +947,34 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
     final reviewers = employees
         .where((e) => e.role.toLowerCase() == 'reviewer')
         .toList();
+
+    // ── Auto-fill Discipline من department المستخدم (مرة واحدة فقط) ──────────
+    if (!_isEdit &&
+        !_disciplineInitialized &&
+        user != null &&
+        disciplines.isNotEmpty) {
+      final userDept = user.department.toLowerCase().trim();
+      // نبحث عن discipline مطابق لـ department المستخدم (case-insensitive)
+      final match = disciplines.firstWhere(
+        (d) => d.toLowerCase().trim() == userDept,
+        orElse: () => '',
+      );
+      if (match.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _selectedDiscipline = match;
+              _disciplineInitialized = true;
+            });
+          }
+        });
+      } else {
+        // حتى لو ما لقينا match، نمنع إعادة المحاولة
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _disciplineInitialized = true);
+        });
+      }
+    }
 
     return DraggableScrollableSheet(
       initialChildSize: 0.9,
@@ -1031,7 +1072,7 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
                   ),
                 ),
                 const SizedBox(height: 8),
-GestureDetector(
+                GestureDetector(
                   onTap: () async {
                     await showDialog(
                       context: context,
@@ -1041,8 +1082,12 @@ GestureDetector(
                         selectedNames: List.from(_selectedEngineerNames),
                         onChanged: (ids, names) {
                           setState(() {
-                            _selectedEngineerIds..clear()..addAll(ids);
-                            _selectedEngineerNames..clear()..addAll(names);
+                            _selectedEngineerIds
+                              ..clear()
+                              ..addAll(ids);
+                            _selectedEngineerNames
+                              ..clear()
+                              ..addAll(names);
                             _errorMessage = null;
                           });
                         },
@@ -1050,7 +1095,10 @@ GestureDetector(
                     );
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: cs.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(12),
@@ -1061,39 +1109,58 @@ GestureDetector(
                           child: _selectedEngineerNames.isEmpty
                               ? Text(
                                   'Select engineers...',
-                                  style: TextStyle(color: cs.onSurface.withOpacity(0.45)),
+                                  style: TextStyle(
+                                    color: cs.onSurface.withOpacity(0.45),
+                                  ),
                                 )
                               : Wrap(
                                   spacing: 6,
                                   runSpacing: 6,
                                   children: _selectedEngineerNames
-                                      .map((name) => Chip(
-                                            label: Text(name, style: const TextStyle(fontSize: 12)),
-                                            visualDensity: VisualDensity.compact,
-                                            deleteIcon: const Icon(Icons.close, size: 14),
-                                            onDeleted: () {
-                                              setState(() {
-                                                final eng = engineers.firstWhere(
-                                                  (e) => e.name == name,
-                                                  orElse: () => engineers.first,
-                                                );
-                                                _selectedEngineerIds.remove(eng.uid);
-                                                _selectedEngineerNames.remove(name);
-                                              });
-                                            },
-                                          ))
+                                      .map(
+                                        (name) => Chip(
+                                          label: Text(
+                                            name,
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          visualDensity: VisualDensity.compact,
+                                          deleteIcon: const Icon(
+                                            Icons.close,
+                                            size: 14,
+                                          ),
+                                          onDeleted: () {
+                                            setState(() {
+                                              final eng = engineers.firstWhere(
+                                                (e) => e.name == name,
+                                                orElse: () => engineers.first,
+                                              );
+                                              _selectedEngineerIds.remove(
+                                                eng.uid,
+                                              );
+                                              _selectedEngineerNames.remove(
+                                                name,
+                                              );
+                                            });
+                                          },
+                                        ),
+                                      )
                                       .toList(),
                                 ),
                         ),
                         const SizedBox(width: 8),
-                        Icon(Icons.keyboard_arrow_down_rounded, color: cs.onSurface.withOpacity(0.5)),
+                        Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: cs.onSurface.withOpacity(0.5),
+                        ),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _selectedReviewer,
+                  value: _selectedReviewer ?? '',
                   decoration: _inputDecoration('Assign Reviewer', cs),
                   items: [
                     const DropdownMenuItem<String>(
@@ -1161,7 +1228,7 @@ GestureDetector(
                 _Field(
                   controller: _linkController,
                   label: 'Task Link (URL)',
-                  hint: 'https://... or \\server\path',
+                  hint: 'https://... or \\serverpath',
                   prefixIcon: Icons.link_rounded,
                   keyboardType: TextInputType.url,
                 ),
@@ -1391,8 +1458,9 @@ GestureDetector(
           activityLog: const [],
         );
 
-        await ref.read(taskRepositoryProvider).createTask(task,
-            createdByName: user?.name ?? '');
+        await ref
+            .read(taskRepositoryProvider)
+            .createTask(task, createdByName: user?.name ?? '');
 
         if (mounted) {
           Navigator.pop(context);
@@ -1486,7 +1554,7 @@ class _DropdownField extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         labelText: label,
         filled: true,
@@ -1731,9 +1799,9 @@ class _TaskLinkWidget extends StatelessWidget {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open link')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open link')));
     }
   }
 
@@ -1743,8 +1811,8 @@ class _TaskLinkWidget extends StatelessWidget {
     final icon = _isLocalPath
         ? Icons.storage_rounded
         : _isWebUrl
-            ? Icons.open_in_new_rounded
-            : Icons.link_rounded;
+        ? Icons.open_in_new_rounded
+        : Icons.link_rounded;
 
     final color = _isLocalPath ? Colors.orange.shade700 : Colors.blue;
 
@@ -1969,14 +2037,7 @@ class _ClientCommentsSectionState extends State<_ClientCommentsSection> {
 // MY NOTES TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
-final _allProjectTasksProvider = StreamProvider.family<List<TaskModel>, String>(
-  (ref, projectId) => FirebaseFirestore.instance
-      .collection('tasks')
-      .where('projectId', isEqualTo: projectId)
-      .orderBy('createdAt', descending: false)
-      .snapshots()
-      .map((s) => s.docs.map((d) => TaskModel.fromFirestore(d)).toList()),
-);
+// projectTasksProvider replaced by projectTasksProvider from task_providers.dart
 
 class _NotesTab extends ConsumerWidget {
   final String projectId;
@@ -1985,7 +2046,7 @@ class _NotesTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
-    final tasksAsync = ref.watch(_allProjectTasksProvider(projectId));
+    final tasksAsync = ref.watch(projectTasksProvider(projectId));
     return tasksAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('$e')),
@@ -1998,35 +2059,61 @@ class _NotesTab extends ConsumerWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.comment_outlined, size: 48, color: cs.onSurface.withOpacity(0.25)),
+                Icon(
+                  Icons.comment_outlined,
+                  size: 48,
+                  color: cs.onSurface.withOpacity(0.25),
+                ),
                 const SizedBox(height: 12),
-                Text('No notes yet', style: TextStyle(color: cs.onSurface.withOpacity(0.4))),
+                Text(
+                  'No notes yet',
+                  style: TextStyle(color: cs.onSurface.withOpacity(0.4)),
+                ),
                 const SizedBox(height: 6),
-                Text('Go to Tasks tab to add notes',
-                    style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.3))),
+                Text(
+                  'Go to Tasks tab to add notes',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurface.withOpacity(0.3),
+                  ),
+                ),
               ],
             ),
           );
         }
-        final allComments = tasksWithNotes.expand((t) => t.clientComments).toList();
-        final resolvedCount = allComments.where((c) => c['isResolved'] == true).length;
+        final allComments = tasksWithNotes
+            .expand((t) => t.clientComments)
+            .toList();
+        final resolvedCount = allComments
+            .where((c) => c['isResolved'] == true)
+            .length;
         final openCount = allComments.length - resolvedCount;
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
             Row(
               children: [
-                _NoteStatChip(label: 'Open', count: openCount, color: Colors.orange),
+                _NoteStatChip(
+                  label: 'Open',
+                  count: openCount,
+                  color: Colors.orange,
+                ),
                 const SizedBox(width: 8),
-                _NoteStatChip(label: 'Resolved', count: resolvedCount, color: Colors.green),
+                _NoteStatChip(
+                  label: 'Resolved',
+                  count: resolvedCount,
+                  color: Colors.green,
+                ),
               ],
             ),
             const SizedBox(height: 14),
-            ...tasksWithNotes.map((task) => _NoteGroup(
-                  taskTitle: task.title,
-                  taskId: task.id,
-                  comments: task.clientComments,
-                )),
+            ...tasksWithNotes.map(
+              (task) => _NoteGroup(
+                taskTitle: task.title,
+                taskId: task.id,
+                comments: task.clientComments,
+              ),
+            ),
           ],
         );
       },
@@ -2038,7 +2125,11 @@ class _NoteStatChip extends StatelessWidget {
   final String label;
   final int count;
   final Color color;
-  const _NoteStatChip({required this.label, required this.count, required this.color});
+  const _NoteStatChip({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2052,9 +2143,20 @@ class _NoteStatChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 6),
-          Text('$count $label', style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+          Text(
+            '$count $label',
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -2064,12 +2166,18 @@ class _NoteStatChip extends StatelessWidget {
 class _NoteGroup extends StatelessWidget {
   final String taskTitle, taskId;
   final List<Map<String, dynamic>> comments;
-  const _NoteGroup({required this.taskTitle, required this.taskId, required this.comments});
+  const _NoteGroup({
+    required this.taskTitle,
+    required this.taskId,
+    required this.comments,
+  });
 
   Future<void> _toggleResolved(int index) async {
     final updated = comments.map((c) => Map<String, dynamic>.from(c)).toList();
     updated[index]['isResolved'] = !(updated[index]['isResolved'] == true);
-    await FirebaseFirestore.instance.collection('tasks').doc(taskId).update({'clientComments': updated});
+    await FirebaseFirestore.instance.collection('tasks').doc(taskId).update({
+      'clientComments': updated,
+    });
   }
 
   @override
@@ -2090,23 +2198,52 @@ class _NoteGroup extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: cs.primaryContainer.withOpacity(0.3),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(14),
+              ),
             ),
             child: Row(
               children: [
                 Icon(Icons.task_alt_outlined, size: 14, color: cs.primary),
                 const SizedBox(width: 8),
-                Expanded(child: Text(taskTitle, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.primary))),
+                Expanded(
+                  child: Text(
+                    taskTitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: cs.primary,
+                    ),
+                  ),
+                ),
                 if (resolvedCount > 0) ...[
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(color: Colors.green.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                    child: Text('$resolvedCount resolved', style: const TextStyle(fontSize: 9, color: Colors.green, fontWeight: FontWeight.w600)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '$resolvedCount resolved',
+                      style: const TextStyle(
+                        fontSize: 9,
+                        color: Colors.green,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 6),
                 ],
-                Text('${comments.length} note${comments.length > 1 ? 's' : ''}',
-                    style: TextStyle(fontSize: 11, color: cs.primary.withOpacity(0.6))),
+                Text(
+                  '${comments.length} note${comments.length > 1 ? 's' : ''}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: cs.primary.withOpacity(0.6),
+                  ),
+                ),
               ],
             ),
           ),
@@ -2122,13 +2259,25 @@ class _NoteGroup extends StatelessWidget {
                   GestureDetector(
                     onTap: () => _toggleResolved(i),
                     child: Container(
-                      width: 26, height: 26,
+                      width: 26,
+                      height: 26,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isResolved ? Colors.green.withOpacity(0.15) : cs.surfaceContainerHighest,
-                        border: Border.all(color: isResolved ? Colors.green : cs.outlineVariant, width: 1.5),
+                        color: isResolved
+                            ? Colors.green.withOpacity(0.15)
+                            : cs.surfaceContainerHighest,
+                        border: Border.all(
+                          color: isResolved ? Colors.green : cs.outlineVariant,
+                          width: 1.5,
+                        ),
                       ),
-                      child: isResolved ? const Icon(Icons.check, size: 14, color: Colors.green) : null,
+                      child: isResolved
+                          ? const Icon(
+                              Icons.check,
+                              size: 14,
+                              color: Colors.green,
+                            )
+                          : null,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -2139,22 +2288,52 @@ class _NoteGroup extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: isResolved ? Colors.green.withOpacity(0.06) : cs.surfaceContainerHighest.withOpacity(0.5),
+                            color: isResolved
+                                ? Colors.green.withOpacity(0.06)
+                                : cs.surfaceContainerHighest.withOpacity(0.5),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: isResolved ? Colors.green.withOpacity(0.2) : Colors.transparent),
+                            border: Border.all(
+                              color: isResolved
+                                  ? Colors.green.withOpacity(0.2)
+                                  : Colors.transparent,
+                            ),
                           ),
-                          child: Text(c['text'] as String? ?? '',
-                              style: TextStyle(fontSize: 13, color: isResolved ? cs.onSurface.withOpacity(0.45) : cs.onSurface,
-                                  decoration: isResolved ? TextDecoration.lineThrough : null)),
+                          child: Text(
+                            c['text'] as String? ?? '',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isResolved
+                                  ? cs.onSurface.withOpacity(0.45)
+                                  : cs.onSurface,
+                              decoration: isResolved
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 4),
-                        Row(children: [
-                          Text(_noteFmtDate(c['createdAt']), style: TextStyle(fontSize: 10, color: cs.onSurface.withOpacity(0.4))),
-                          if (isResolved) ...[
-                            const SizedBox(width: 6),
-                            const Text('✓ Resolved', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.w500)),
+                        Row(
+                          children: [
+                            Text(
+                              _noteFmtDate(c['createdAt']),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: cs.onSurface.withOpacity(0.4),
+                              ),
+                            ),
+                            if (isResolved) ...[
+                              const SizedBox(width: 6),
+                              const Text(
+                                '✓ Resolved',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ],
-                        ]),
+                        ),
                       ],
                     ),
                   ),
@@ -2193,118 +2372,247 @@ class _ReportTab extends StatefulWidget {
   State<_ReportTab> createState() => _ReportTabState();
 }
 
-class _ReportTabState extends State<_ReportTab> with AutomaticKeepAliveClientMixin {
+class _ReportTabState extends State<_ReportTab>
+    with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
 
   bool _exporting = false;
 
-  Future<void> _exportPdf(List<TaskModel> tasks, Map<String, dynamic>? projectData) async {
+  Future<void> _exportPdf(
+    List<TaskModel> tasks,
+    Map<String, dynamic>? projectData,
+  ) async {
     setState(() => _exporting = true);
     try {
-      final progress = (projectData?['completionPercentage'] as num?)?.toDouble() ?? 0.0;
+      final progress =
+          (projectData?['completionPercentage'] as num?)?.toDouble() ?? 0.0;
       final status = projectData?['status'] as String? ?? '—';
       final endDate = _rptFmtDate(projectData?['endDate']);
       final allComments = tasks.expand((t) => t.clientComments).toList();
       final totalNotes = allComments.length;
-      final resolvedNotes = allComments.where((c) => c['isResolved'] == true).length;
+      final resolvedNotes = allComments
+          .where((c) => c['isResolved'] == true)
+          .length;
       final openNotes = totalNotes - resolvedNotes;
       final total = tasks.length;
       final completed = tasks.where((t) => t.status == 'completed').length;
       final inProg = tasks.where((t) => t.status == 'in_progress').length;
-      final teamLeadReview = tasks.where((t) => t.status == 'team_leader_review').length;
+      final teamLeadReview = tasks
+          .where((t) => t.status == 'team_leader_review')
+          .length;
       final qcReview = tasks.where((t) => t.status == 'qc_review').length;
-      final clientReview = tasks.where((t) => t.status == 'client_review').length;
+      final clientReview = tasks
+          .where((t) => t.status == 'client_review')
+          .length;
       final notStart = tasks.where((t) => t.status == 'not_started').length;
 
       final fontData = await rootBundle.load('assets/fonts/Cairo-Regular.ttf');
       final cairoFont = pw.Font.ttf(fontData);
       final baseStyle = pw.TextStyle(font: cairoFont, fontSize: 10);
-      final titleStyle = pw.TextStyle(font: cairoFont, fontSize: 18, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF2E7D32));
-      final sectionStyle = pw.TextStyle(font: cairoFont, fontSize: 13, fontWeight: pw.FontWeight.bold);
-      final headerCellStyle = pw.TextStyle(font: cairoFont, fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.white);
+      final titleStyle = pw.TextStyle(
+        font: cairoFont,
+        fontSize: 18,
+        fontWeight: pw.FontWeight.bold,
+        color: const PdfColor.fromInt(0xFF2E7D32),
+      );
+      final sectionStyle = pw.TextStyle(
+        font: cairoFont,
+        fontSize: 13,
+        fontWeight: pw.FontWeight.bold,
+      );
+      final headerCellStyle = pw.TextStyle(
+        font: cairoFont,
+        fontWeight: pw.FontWeight.bold,
+        fontSize: 9,
+        color: PdfColors.white,
+      );
       final cellStyle = pw.TextStyle(font: cairoFont, fontSize: 8);
 
       final pdf = pw.Document();
-      pdf.addPage(pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(28),
-        textDirection: pw.TextDirection.rtl,
-        build: (ctx) => [
-          pw.Text(widget.projectName, style: titleStyle, textDirection: pw.TextDirection.rtl),
-          pw.SizedBox(height: 4),
-          pw.Text('Project Report  •  Generated: ${_rptFmtNow()}', style: pw.TextStyle(font: cairoFont, fontSize: 9, color: PdfColors.grey600)),
-          pw.Divider(color: PdfColors.grey300),
-          pw.SizedBox(height: 10),
-          pw.Container(
-            padding: const pw.EdgeInsets.all(12),
-            decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF1F8E9)),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('Status: ${_rptStatusLabel(status)}', style: baseStyle),
-                pw.Text('End Date: $endDate', style: baseStyle),
-                pw.Text('Progress: ${progress.toStringAsFixed(0)}%',
-                    style: pw.TextStyle(font: cairoFont, fontSize: 10, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF2E7D32))),
-              ],
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(28),
+          textDirection: pw.TextDirection.rtl,
+          build: (ctx) => [
+            pw.Text(
+              widget.projectName,
+              style: titleStyle,
+              textDirection: pw.TextDirection.rtl,
             ),
-          ),
-          pw.SizedBox(height: 16),
-          pw.Text('Tasks Breakdown', style: sectionStyle),
-          pw.SizedBox(height: 8),
-          pw.Table.fromTextArray(
-            headers: ['Category', 'Count', '%'],
-            data: [
-              ['Completed', '$completed', total > 0 ? '${(completed / total * 100).toStringAsFixed(0)}%' : '0%'],
-              ['In Progress', '$inProg', total > 0 ? '${(inProg / total * 100).toStringAsFixed(0)}%' : '0%'],
-              ['Team Leader Review', '$teamLeadReview', total > 0 ? '${(teamLeadReview / total * 100).toStringAsFixed(0)}%' : '0%'],
-              ['QC Review', '$qcReview', total > 0 ? '${(qcReview / total * 100).toStringAsFixed(0)}%' : '0%'],
-              ['Client Review', '$clientReview', total > 0 ? '${(clientReview / total * 100).toStringAsFixed(0)}%' : '0%'],
-              ['Not Started', '$notStart', total > 0 ? '${(notStart / total * 100).toStringAsFixed(0)}%' : '0%'],
-              ['Total', '$total', '100%'],
-            ],
-            headerStyle: headerCellStyle,
-            headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF2E7D32)),
-            cellStyle: pw.TextStyle(font: cairoFont, fontSize: 9),
-            oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF1F8E9)),
-            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-            columnWidths: {0: const pw.FlexColumnWidth(3), 1: const pw.FlexColumnWidth(1.5), 2: const pw.FlexColumnWidth(1.5)},
-          ),
-          pw.SizedBox(height: 16),
-          pw.Text('My Notes Status', style: sectionStyle),
-          pw.SizedBox(height: 8),
-          pw.Table.fromTextArray(
-            headers: ['Category', 'Count'],
-            data: [['Total Notes', '$totalNotes'], ['Resolved', '$resolvedNotes'], ['Open', '$openNotes']],
-            headerStyle: headerCellStyle,
-            headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF2E7D32)),
-            cellStyle: pw.TextStyle(font: cairoFont, fontSize: 9),
-            oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF1F8E9)),
-            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-          ),
-          pw.SizedBox(height: 16),
-          pw.Text('All Tasks', style: sectionStyle),
-          pw.SizedBox(height: 8),
-          pw.Table.fromTextArray(
-            headers: ['Task', 'Assigned To', 'Status', 'End Date', 'Notes', 'Resolved'],
-            data: tasks.map((t) {
-              final tNotes = t.clientComments.length;
-              final tResolved = t.clientComments.where((c) => c['isResolved'] == true).length;
-              return [t.title, t.assignedEngineerNames.isEmpty ? '—' : t.assignedEngineerNames.join(', '),
-                _rptTaskStatusLabel(t.status), _rptFmtDateTime(t.endDate), '$tNotes', '$tResolved'];
-            }).toList(),
-            headerStyle: headerCellStyle,
-            headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF2E7D32)),
-            cellStyle: cellStyle,
-            oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF1F8E9)),
-            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-          ),
-        ],
-      ));
+            pw.SizedBox(height: 4),
+            pw.Text(
+              'Project Report  •  Generated: ${_rptFmtNow()}',
+              style: pw.TextStyle(
+                font: cairoFont,
+                fontSize: 9,
+                color: PdfColors.grey600,
+              ),
+            ),
+            pw.Divider(color: PdfColors.grey300),
+            pw.SizedBox(height: 10),
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              decoration: const pw.BoxDecoration(
+                color: PdfColor.fromInt(0xFFF1F8E9),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Status: ${_rptStatusLabel(status)}',
+                    style: baseStyle,
+                  ),
+                  pw.Text('End Date: $endDate', style: baseStyle),
+                  pw.Text(
+                    'Progress: ${progress.toStringAsFixed(0)}%',
+                    style: pw.TextStyle(
+                      font: cairoFont,
+                      fontSize: 10,
+                      fontWeight: pw.FontWeight.bold,
+                      color: const PdfColor.fromInt(0xFF2E7D32),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 16),
+            pw.Text('Tasks Breakdown', style: sectionStyle),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: ['Category', 'Count', '%'],
+              data: [
+                [
+                  'Completed',
+                  '$completed',
+                  total > 0
+                      ? '${(completed / total * 100).toStringAsFixed(0)}%'
+                      : '0%',
+                ],
+                [
+                  'In Progress',
+                  '$inProg',
+                  total > 0
+                      ? '${(inProg / total * 100).toStringAsFixed(0)}%'
+                      : '0%',
+                ],
+                [
+                  'Team Leader Review',
+                  '$teamLeadReview',
+                  total > 0
+                      ? '${(teamLeadReview / total * 100).toStringAsFixed(0)}%'
+                      : '0%',
+                ],
+                [
+                  'QC Review',
+                  '$qcReview',
+                  total > 0
+                      ? '${(qcReview / total * 100).toStringAsFixed(0)}%'
+                      : '0%',
+                ],
+                [
+                  'Client Review',
+                  '$clientReview',
+                  total > 0
+                      ? '${(clientReview / total * 100).toStringAsFixed(0)}%'
+                      : '0%',
+                ],
+                [
+                  'Not Started',
+                  '$notStart',
+                  total > 0
+                      ? '${(notStart / total * 100).toStringAsFixed(0)}%'
+                      : '0%',
+                ],
+                ['Total', '$total', '100%'],
+              ],
+              headerStyle: headerCellStyle,
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColor.fromInt(0xFF2E7D32),
+              ),
+              cellStyle: pw.TextStyle(font: cairoFont, fontSize: 9),
+              oddRowDecoration: const pw.BoxDecoration(
+                color: PdfColor.fromInt(0xFFF1F8E9),
+              ),
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(3),
+                1: const pw.FlexColumnWidth(1.5),
+                2: const pw.FlexColumnWidth(1.5),
+              },
+            ),
+            pw.SizedBox(height: 16),
+            pw.Text('My Notes Status', style: sectionStyle),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: ['Category', 'Count'],
+              data: [
+                ['Total Notes', '$totalNotes'],
+                ['Resolved', '$resolvedNotes'],
+                ['Open', '$openNotes'],
+              ],
+              headerStyle: headerCellStyle,
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColor.fromInt(0xFF2E7D32),
+              ),
+              cellStyle: pw.TextStyle(font: cairoFont, fontSize: 9),
+              oddRowDecoration: const pw.BoxDecoration(
+                color: PdfColor.fromInt(0xFFF1F8E9),
+              ),
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+            ),
+            pw.SizedBox(height: 16),
+            pw.Text('All Tasks', style: sectionStyle),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: [
+                'Task',
+                'Assigned To',
+                'Status',
+                'End Date',
+                'Notes',
+                'Resolved',
+              ],
+              data: tasks.map((t) {
+                final tNotes = t.clientComments.length;
+                final tResolved = t.clientComments
+                    .where((c) => c['isResolved'] == true)
+                    .length;
+                return [
+                  t.title,
+                  t.assignedEngineerNames.isEmpty
+                      ? '—'
+                      : t.assignedEngineerNames.join(', '),
+                  _rptTaskStatusLabel(t.status),
+                  _rptFmtDateTime(t.endDate),
+                  '$tNotes',
+                  '$tResolved',
+                ];
+              }).toList(),
+              headerStyle: headerCellStyle,
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColor.fromInt(0xFF2E7D32),
+              ),
+              cellStyle: cellStyle,
+              oddRowDecoration: const pw.BoxDecoration(
+                color: PdfColor.fromInt(0xFFF1F8E9),
+              ),
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+            ),
+          ],
+        ),
+      );
 
-      await Printing.sharePdf(bytes: await pdf.save(), filename: '${widget.projectName.replaceAll(' ', '_')}_report.pdf');
+      await Printing.sharePdf(
+        bytes: await pdf.save(),
+        filename: '${widget.projectName.replaceAll(' ', '_')}_report.pdf',
+      );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('PDF Error: $e'), backgroundColor: Colors.red));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PDF Error: $e'), backgroundColor: Colors.red),
+        );
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -2314,7 +2622,9 @@ class _ReportTabState extends State<_ReportTab> with AutomaticKeepAliveClientMix
     setState(() => _exporting = true);
     try {
       final allComments = tasks.expand((t) => t.clientComments).toList();
-      final resolvedNotes = allComments.where((c) => c['isResolved'] == true).length;
+      final resolvedNotes = allComments
+          .where((c) => c['isResolved'] == true)
+          .length;
       final openNotes = allComments.length - resolvedNotes;
 
       final excel = Excel.createExcel();
@@ -2325,30 +2635,59 @@ class _ReportTabState extends State<_ReportTab> with AutomaticKeepAliveClientMix
         ['Project', widget.projectName],
         ['Total Tasks', '${tasks.length}'],
         ['Completed', '${tasks.where((t) => t.status == 'completed').length}'],
-        ['In Progress', '${tasks.where((t) => t.status == 'in_progress').length}'],
-        ['Team Leader Review', '${tasks.where((t) => t.status == 'team_leader_review').length}'],
+        [
+          'In Progress',
+          '${tasks.where((t) => t.status == 'in_progress').length}',
+        ],
+        [
+          'Team Leader Review',
+          '${tasks.where((t) => t.status == 'team_leader_review').length}',
+        ],
         ['QC Review', '${tasks.where((t) => t.status == 'qc_review').length}'],
-        ['Client Review', '${tasks.where((t) => t.status == 'client_review').length}'],
-        ['Not Started', '${tasks.where((t) => t.status == 'not_started').length}'],
+        [
+          'Client Review',
+          '${tasks.where((t) => t.status == 'client_review').length}',
+        ],
+        [
+          'Not Started',
+          '${tasks.where((t) => t.status == 'not_started').length}',
+        ],
         ['Total Notes', '${allComments.length}'],
         ['Resolved Notes', '$resolvedNotes'],
         ['Open Notes', '$openNotes'],
       ];
       for (var i = 0; i < summaryData.length; i++) {
-        _rptExcelRow(summary, summaryData[i].map((v) => TextCellValue(v)).toList(), i + 1);
+        _rptExcelRow(
+          summary,
+          summaryData[i].map((v) => TextCellValue(v)).toList(),
+          i + 1,
+        );
       }
       summary.setColumnWidth(0, 22);
       summary.setColumnWidth(1, 28);
 
       final tasksSheet = excel['Tasks'];
-      _rptExcelHeader(tasksSheet, ['Task', 'Assigned To', 'Status', 'End Date', 'Total Notes', 'Resolved Notes']);
+      _rptExcelHeader(tasksSheet, [
+        'Task',
+        'Assigned To',
+        'Status',
+        'End Date',
+        'Total Notes',
+        'Resolved Notes',
+      ]);
       for (var i = 0; i < tasks.length; i++) {
         final t = tasks[i];
         final tNotes = t.clientComments.length;
-        final tResolved = t.clientComments.where((c) => c['isResolved'] == true).length;
+        final tResolved = t.clientComments
+            .where((c) => c['isResolved'] == true)
+            .length;
         _rptExcelRow(tasksSheet, [
           TextCellValue(t.title),
-          TextCellValue(t.assignedEngineerNames.isEmpty ? '—' : t.assignedEngineerNames.join(', ')),
+          TextCellValue(
+            t.assignedEngineerNames.isEmpty
+                ? '—'
+                : t.assignedEngineerNames.join(', '),
+          ),
           TextCellValue(_rptTaskStatusLabel(t.status)),
           TextCellValue(_rptFmtDateTime(t.endDate)),
           IntCellValue(tNotes),
@@ -2374,9 +2713,18 @@ class _ReportTabState extends State<_ReportTab> with AutomaticKeepAliveClientMix
 
       final bytes = excel.encode();
       if (bytes == null) return;
-      await downloadExcel(Uint8List.fromList(bytes), '${widget.projectName.replaceAll(' ', '_')}_report.xlsx');
+      await downloadExcel(
+        Uint8List.fromList(bytes),
+        '${widget.projectName.replaceAll(' ', '_')}_report.xlsx',
+      );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Excel Error: $e'), backgroundColor: Colors.red));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Excel Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -2388,149 +2736,422 @@ class _ReportTabState extends State<_ReportTab> with AutomaticKeepAliveClientMix
     return Consumer(
       builder: (context, ref, _) {
         final cs = Theme.of(context).colorScheme;
-        final tasksAsync = ref.watch(_allProjectTasksProvider(widget.projectId));
+        final tasksAsync = ref.watch(
+          projectTasksProvider(widget.projectId),
+        );
         final projectAsync = ref.watch(singleProjectProvider(widget.projectId));
         return tasksAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('$e')),
           data: (tasks) {
             final total = tasks.length;
-            final completed = tasks.where((t) => t.status == 'completed').length;
+            final completed = tasks
+                .where((t) => t.status == 'completed')
+                .length;
             final inProg = tasks.where((t) => t.status == 'in_progress').length;
-            final teamLeadReview = tasks.where((t) => t.status == 'team_leader_review').length;
+            final teamLeadReview = tasks
+                .where((t) => t.status == 'team_leader_review')
+                .length;
             final qcReview = tasks.where((t) => t.status == 'qc_review').length;
-            final clientReview = tasks.where((t) => t.status == 'client_review').length;
-            final notStart = tasks.where((t) => t.status == 'not_started').length;
+            final clientReview = tasks
+                .where((t) => t.status == 'client_review')
+                .length;
+            final notStart = tasks
+                .where((t) => t.status == 'not_started')
+                .length;
             final allComments = tasks.expand((t) => t.clientComments).toList();
             final totalNotes = allComments.length;
-            final resolvedNotes = allComments.where((c) => c['isResolved'] == true).length;
+            final resolvedNotes = allComments
+                .where((c) => c['isResolved'] == true)
+                .length;
             final openNotes = totalNotes - resolvedNotes;
             final project = projectAsync.value;
-            final progress = project != null ? project.completionPercentage : 0.0;
+            final progress = project != null
+                ? project.completionPercentage
+                : 0.0;
 
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Row(children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: _exporting
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.red))
-                          : const Icon(Icons.picture_as_pdf_outlined, size: 16, color: Colors.red),
-                      label: const Text('Export PDF', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
-                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red), padding: const EdgeInsets.symmetric(vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                      onPressed: _exporting ? null : () => _exportPdf(tasks, null),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: _exporting
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.red,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.picture_as_pdf_outlined,
+                                size: 16,
+                                color: Colors.red,
+                              ),
+                        label: const Text(
+                          'Export PDF',
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.red),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: _exporting
+                            ? null
+                            : () => _exportPdf(tasks, null),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: _exporting
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green))
-                          : const Icon(Icons.table_chart_outlined, size: 16, color: Colors.green),
-                      label: const Text('Export Excel', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
-                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.green), padding: const EdgeInsets.symmetric(vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                      onPressed: _exporting ? null : () => _exportExcel(tasks),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: _exporting
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.green,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.table_chart_outlined,
+                                size: 16,
+                                color: Colors.green,
+                              ),
+                        label: const Text(
+                          'Export Excel',
+                          style: TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.green),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: _exporting
+                            ? null
+                            : () => _exportExcel(tasks),
+                      ),
                     ),
-                  ),
-                ]),
+                  ],
+                ),
                 const SizedBox(height: 16),
-                _RptSection(title: 'Task Progress', icon: Icons.show_chart_rounded,
-                  child: Column(children: [
-                    Row(children: [
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('${progress.toStringAsFixed(0)}%', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: cs.primary)),
-                        Text('Tasks Completion', style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.5))),
-                      ])),
-                      _RptCircularProgress(value: progress / 100, color: cs.primary),
-                    ]),
-                    const SizedBox(height: 12),
-                    ClipRRect(borderRadius: BorderRadius.circular(8),
-                      child: LinearProgressIndicator(value: progress / 100, minHeight: 8, backgroundColor: cs.surfaceContainerHighest, valueColor: AlwaysStoppedAnimation(cs.primary))),
-                  ]),
-                ),
-                const SizedBox(height: 14),
-                _RptSection(title: 'Tasks Breakdown', icon: Icons.task_alt_outlined,
-                  child: Column(children: [
-                    Row(children: [
-                      Expanded(child: _RptStatCard(label: 'Total', value: '$total', color: cs.primary)),
-                      const SizedBox(width: 8),
-                      Expanded(child: _RptStatCard(label: 'Done', value: '$completed', color: Colors.green)),
-                    ]),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      Expanded(child: _RptStatCard(label: 'In Progress', value: '$inProg', color: Colors.orange)),
-                      const SizedBox(width: 8),
-                      Expanded(child: _RptStatCard(label: 'TL Review', value: '$teamLeadReview', color: Colors.indigo)),
-                      const SizedBox(width: 8),
-                      Expanded(child: _RptStatCard(label: 'QC Review', value: '$qcReview', color: Colors.deepPurple)),
-                    ]),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      Expanded(child: _RptStatCard(label: 'Client Review', value: '$clientReview', color: Colors.teal)),
-                      const SizedBox(width: 8),
-                      Expanded(child: _RptStatCard(label: 'Not Started', value: '$notStart', color: Colors.grey)),
-                      const SizedBox(width: 8),
-                      const Expanded(child: SizedBox()),
-                    ]),
-                    if (total > 0) ...[
-                      const SizedBox(height: 14),
-                      _RptStatusBar(segments: [
-                        if (completed > 0) _RptSegment('Done', completed / total, Colors.green),
-                        if (inProg > 0) _RptSegment('In Progress', inProg / total, Colors.orange),
-                        if (teamLeadReview > 0) _RptSegment('TL Review', teamLeadReview / total, Colors.indigo),
-                        if (qcReview > 0) _RptSegment('QC Review', qcReview / total, Colors.deepPurple),
-                        if (clientReview > 0) _RptSegment('Client Review', clientReview / total, Colors.teal),
-                        if (notStart > 0) _RptSegment('Not Started', notStart / total, Colors.grey.shade400),
-                      ]),
+                _RptSection(
+                  title: 'Task Progress',
+                  icon: Icons.show_chart_rounded,
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${progress.toStringAsFixed(0)}%',
+                                  style: TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                    color: cs.primary,
+                                  ),
+                                ),
+                                Text(
+                                  'Tasks Completion',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: cs.onSurface.withOpacity(0.5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _RptCircularProgress(
+                            value: progress / 100,
+                            color: cs.primary,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: LinearProgressIndicator(
+                          value: progress / 100,
+                          minHeight: 8,
+                          backgroundColor: cs.surfaceContainerHighest,
+                          valueColor: AlwaysStoppedAnimation(cs.primary),
+                        ),
+                      ),
                     ],
-                  ]),
+                  ),
                 ),
                 const SizedBox(height: 14),
-                _RptSection(title: 'My Notes Status', icon: Icons.comment_outlined,
-                  child: totalNotes == 0
-                      ? Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text('No notes added yet.', style: TextStyle(color: cs.onSurface.withOpacity(0.4), fontSize: 13)))
-                      : Column(children: [
-                          Row(children: [
-                            Expanded(child: _RptStatCard(label: 'Total', value: '$totalNotes', color: cs.primary)),
-                            const SizedBox(width: 8),
-                            Expanded(child: _RptStatCard(label: 'Open', value: '$openNotes', color: Colors.orange)),
-                            const SizedBox(width: 8),
-                            Expanded(child: _RptStatCard(label: 'Resolved', value: '$resolvedNotes', color: Colors.green)),
-                          ]),
-                          if (totalNotes > 0) ...[
-                            const SizedBox(height: 14),
-                            _RptStatusBar(segments: [
-                              if (resolvedNotes > 0) _RptSegment('Resolved', resolvedNotes / totalNotes, Colors.green),
-                              if (openNotes > 0) _RptSegment('Open', openNotes / totalNotes, Colors.orange),
-                            ]),
+                _RptSection(
+                  title: 'Tasks Breakdown',
+                  icon: Icons.task_alt_outlined,
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _RptStatCard(
+                              label: 'Total',
+                              value: '$total',
+                              color: cs.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _RptStatCard(
+                              label: 'Done',
+                              value: '$completed',
+                              color: Colors.green,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _RptStatCard(
+                              label: 'In Progress',
+                              value: '$inProg',
+                              color: Colors.orange,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _RptStatCard(
+                              label: 'TL Review',
+                              value: '$teamLeadReview',
+                              color: Colors.indigo,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _RptStatCard(
+                              label: 'QC Review',
+                              value: '$qcReview',
+                              color: Colors.deepPurple,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _RptStatCard(
+                              label: 'Client Review',
+                              value: '$clientReview',
+                              color: Colors.teal,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _RptStatCard(
+                              label: 'Not Started',
+                              value: '$notStart',
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Expanded(child: SizedBox()),
+                        ],
+                      ),
+                      if (total > 0) ...[
+                        const SizedBox(height: 14),
+                        _RptStatusBar(
+                          segments: [
+                            if (completed > 0)
+                              _RptSegment(
+                                'Done',
+                                completed / total,
+                                Colors.green,
+                              ),
+                            if (inProg > 0)
+                              _RptSegment(
+                                'In Progress',
+                                inProg / total,
+                                Colors.orange,
+                              ),
+                            if (teamLeadReview > 0)
+                              _RptSegment(
+                                'TL Review',
+                                teamLeadReview / total,
+                                Colors.indigo,
+                              ),
+                            if (qcReview > 0)
+                              _RptSegment(
+                                'QC Review',
+                                qcReview / total,
+                                Colors.deepPurple,
+                              ),
+                            if (clientReview > 0)
+                              _RptSegment(
+                                'Client Review',
+                                clientReview / total,
+                                Colors.teal,
+                              ),
+                            if (notStart > 0)
+                              _RptSegment(
+                                'Not Started',
+                                notStart / total,
+                                Colors.grey.shade400,
+                              ),
                           ],
-                        ]),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _RptSection(
+                  title: 'My Notes Status',
+                  icon: Icons.comment_outlined,
+                  child: totalNotes == 0
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'No notes added yet.',
+                            style: TextStyle(
+                              color: cs.onSurface.withOpacity(0.4),
+                              fontSize: 13,
+                            ),
+                          ),
+                        )
+                      : Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _RptStatCard(
+                                    label: 'Total',
+                                    value: '$totalNotes',
+                                    color: cs.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _RptStatCard(
+                                    label: 'Open',
+                                    value: '$openNotes',
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _RptStatCard(
+                                    label: 'Resolved',
+                                    value: '$resolvedNotes',
+                                    color: Colors.green,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (totalNotes > 0) ...[
+                              const SizedBox(height: 14),
+                              _RptStatusBar(
+                                segments: [
+                                  if (resolvedNotes > 0)
+                                    _RptSegment(
+                                      'Resolved',
+                                      resolvedNotes / totalNotes,
+                                      Colors.green,
+                                    ),
+                                  if (openNotes > 0)
+                                    _RptSegment(
+                                      'Open',
+                                      openNotes / totalNotes,
+                                      Colors.orange,
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
                 ),
                 if (tasks.isNotEmpty) ...[
                   const SizedBox(height: 14),
-                  _RptSection(title: 'All Tasks', icon: Icons.list_alt_rounded,
-                    child: Column(children: tasks.map((t) {
-                      final tNotes = t.clientComments.length;
-                      final tResolved = t.clientComments.where((c) => c['isResolved'] == true).length;
-                      return Padding(padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(children: [
-                          Container(width: 8, height: 8, decoration: BoxDecoration(color: _rptTaskStatusColor(t.status), shape: BoxShape.circle)),
-                          const SizedBox(width: 10),
-                          Expanded(child: Text(t.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          const SizedBox(width: 8),
-                          if (tNotes > 0)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(color: tResolved == tNotes ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                              child: Text(tResolved == tNotes ? '$tNotes ✓' : '$tResolved/$tNotes',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: tResolved == tNotes ? Colors.green : Colors.orange)),
-                            ),
-                          const SizedBox(width: 6),
-                          _RptTaskStatusBadge(t.status),
-                        ]),
-                      );
-                    }).toList()),
+                  _RptSection(
+                    title: 'All Tasks',
+                    icon: Icons.list_alt_rounded,
+                    child: Column(
+                      children: tasks.map((t) {
+                        final tNotes = t.clientComments.length;
+                        final tResolved = t.clientComments
+                            .where((c) => c['isResolved'] == true)
+                            .length;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: _rptTaskStatusColor(t.status),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  t.title,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              if (tNotes > 0)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: tResolved == tNotes
+                                        ? Colors.green.withOpacity(0.1)
+                                        : Colors.orange.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    tResolved == tNotes
+                                        ? '$tNotes ✓'
+                                        : '$tResolved/$tNotes',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: tResolved == tNotes
+                                          ? Colors.green
+                                          : Colors.orange,
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(width: 6),
+                              _RptTaskStatusBadge(t.status),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ),
                 ],
                 const SizedBox(height: 24),
@@ -2549,7 +3170,11 @@ class _RptSection extends StatelessWidget {
   final String title;
   final IconData icon;
   final Widget child;
-  const _RptSection({required this.title, required this.icon, required this.child});
+  const _RptSection({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2557,19 +3182,40 @@ class _RptSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.surface, borderRadius: BorderRadius.circular(16),
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: cs.outlineVariant.withOpacity(0.4)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6),
+        ],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: cs.primaryContainer.withOpacity(0.5), borderRadius: BorderRadius.circular(8)), child: Icon(icon, size: 16, color: cs.primary)),
-          const SizedBox(width: 10),
-          Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        ]),
-        const SizedBox(height: 14),
-        child,
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 16, color: cs.primary),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
     );
   }
 }
@@ -2577,18 +3223,39 @@ class _RptSection extends StatelessWidget {
 class _RptStatCard extends StatelessWidget {
   final String label, value;
   final Color color;
-  const _RptStatCard({required this.label, required this.value, required this.color});
+  const _RptStatCard({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(color: color.withOpacity(0.07), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.2))),
-      child: Column(children: [
-        Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-        const SizedBox(height: 2),
-        Text(label, style: TextStyle(fontSize: 10, color: color.withOpacity(0.75)), textAlign: TextAlign.center),
-      ]),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(fontSize: 10, color: color.withOpacity(0.75)),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2606,18 +3273,57 @@ class _RptStatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      ClipRRect(borderRadius: BorderRadius.circular(8),
-        child: SizedBox(height: 12, child: Row(children: segments.map((s) =>
-          Expanded(flex: ((s.fraction * 100).round()).clamp(1, 100), child: Container(color: s.color))).toList()))),
-      const SizedBox(height: 8),
-      Wrap(spacing: 12, runSpacing: 4, children: segments.map((s) =>
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: s.color, shape: BoxShape.circle)),
-          const SizedBox(width: 4),
-          Text('${s.label} ${(s.fraction * 100).toStringAsFixed(0)}%', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
-        ])).toList()),
-    ]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            height: 12,
+            child: Row(
+              children: segments
+                  .map(
+                    (s) => Expanded(
+                      flex: ((s.fraction * 100).round()).clamp(1, 100),
+                      child: Container(color: s.color),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 4,
+          children: segments
+              .map(
+                (s) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: s.color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${s.label} ${(s.fraction * 100).toStringAsFixed(0)}%',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    );
   }
 }
 
@@ -2628,11 +3334,29 @@ class _RptCircularProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(width: 64, height: 64,
-      child: Stack(alignment: Alignment.center, children: [
-        CircularProgressIndicator(value: value, strokeWidth: 6, backgroundColor: color.withOpacity(0.15), valueColor: AlwaysStoppedAnimation(color)),
-        Text('${(value * 100).toStringAsFixed(0)}%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
-      ]));
+    return SizedBox(
+      width: 64,
+      height: 64,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CircularProgressIndicator(
+            value: value,
+            strokeWidth: 6,
+            backgroundColor: color.withOpacity(0.15),
+            valueColor: AlwaysStoppedAnimation(color),
+          ),
+          Text(
+            '${(value * 100).toStringAsFixed(0)}%',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -2645,8 +3369,18 @@ class _RptTaskStatusBadge extends StatelessWidget {
     final color = _rptTaskStatusColor(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-      child: Text(_rptTaskStatusLabel(status), style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w600)),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        _rptTaskStatusLabel(status),
+        style: TextStyle(
+          fontSize: 9,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }
@@ -2664,11 +3398,20 @@ Color _rptTaskStatusColor(String s) => switch (s) {
 };
 
 String _rptStatusLabel(dynamic s) =>
-    const {'active': 'Active', 'completed': 'Completed', 'on_hold': 'On Hold'}[s as String?] ?? (s?.toString() ?? '—');
+    const {'active': 'Active', 'completed': 'Completed', 'on_hold': 'On Hold'}[s
+        as String?] ??
+    (s?.toString() ?? '—');
 
 String _rptTaskStatusLabel(String? s) =>
-    const {'not_started': 'Not Started', 'in_progress': 'In Progress', 'team_leader_review': 'Team Leader Review',
-      'qc_review': 'QC Review', 'client_review': 'Client Review', 'completed': 'Completed'}[s] ?? (s ?? '—');
+    const {
+      'not_started': 'Not Started',
+      'in_progress': 'In Progress',
+      'team_leader_review': 'Team Leader Review',
+      'qc_review': 'QC Review',
+      'client_review': 'Client Review',
+      'completed': 'Completed',
+    }[s] ??
+    (s ?? '—');
 
 String _rptFmtDate(dynamic v) {
   if (v == null) return '—';
@@ -2693,7 +3436,9 @@ String _rptFmtNow() {
 void _rptExcelHeader(Sheet sheet, List<String> headers) {
   sheet.appendRow(headers.map((h) => TextCellValue(h)).toList());
   for (var i = 0; i < headers.length; i++) {
-    sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0)).cellStyle = CellStyle(
+    sheet
+        .cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0))
+        .cellStyle = CellStyle(
       bold: true,
       backgroundColorHex: ExcelColor.fromHexString('#2E7D32'),
       fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
@@ -2708,8 +3453,12 @@ void _rptExcelRow(Sheet sheet, List<CellValue> values, int rowIndex) {
   sheet.appendRow(values);
   final isEven = rowIndex % 2 == 0;
   for (var i = 0; i < values.length; i++) {
-    sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIndex)).cellStyle = CellStyle(
-      backgroundColorHex: isEven ? ExcelColor.fromHexString('#FFFFFF') : ExcelColor.fromHexString('#F1F8E9'),
+    sheet
+        .cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIndex))
+        .cellStyle = CellStyle(
+      backgroundColorHex: isEven
+          ? ExcelColor.fromHexString('#FFFFFF')
+          : ExcelColor.fromHexString('#F1F8E9'),
       fontSize: 10,
       verticalAlign: VerticalAlign.Center,
     );
@@ -2759,7 +3508,10 @@ class _EngineersPickerDialogState extends State<_EngineersPickerDialog> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7, maxWidth: 420),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+          maxWidth: 420,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2770,13 +3522,33 @@ class _EngineersPickerDialogState extends State<_EngineersPickerDialog> {
                 children: [
                   Icon(Icons.group_outlined, color: cs.primary, size: 20),
                   const SizedBox(width: 10),
-                  Text('Assign Engineers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                  Text(
+                    'Assign Engineers',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: cs.onSurface,
+                    ),
+                  ),
                   const Spacer(),
                   if (_ids.isNotEmpty)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: cs.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
-                      child: Text('${_ids.length} selected', style: TextStyle(fontSize: 11, color: cs.primary, fontWeight: FontWeight.w600)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${_ids.length} selected',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -2790,7 +3562,10 @@ class _EngineersPickerDialogState extends State<_EngineersPickerDialog> {
                   prefixIcon: const Icon(Icons.search, size: 18),
                   filled: true,
                   fillColor: cs.surfaceContainerHighest,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
                   contentPadding: const EdgeInsets.symmetric(vertical: 8),
                   isDense: true,
                 ),
@@ -2819,21 +3594,36 @@ class _EngineersPickerDialogState extends State<_EngineersPickerDialog> {
                       });
                     },
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
                       child: Row(
                         children: [
                           Container(
-                            width: 36, height: 36,
+                            width: 36,
+                            height: 36,
                             decoration: BoxDecoration(
-                              color: checked ? cs.primary : cs.surfaceContainerHighest,
+                              color: checked
+                                  ? cs.primary
+                                  : cs.surfaceContainerHighest,
                               shape: BoxShape.circle,
                             ),
                             child: Center(
                               child: checked
-                                  ? const Icon(Icons.check, size: 18, color: Colors.white)
+                                  ? const Icon(
+                                      Icons.check,
+                                      size: 18,
+                                      color: Colors.white,
+                                    )
                                   : Text(
-                                      e.name.isNotEmpty ? e.name[0].toUpperCase() : '?',
-                                      style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface.withOpacity(0.6)),
+                                      e.name.isNotEmpty
+                                          ? e.name[0].toUpperCase()
+                                          : '?',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: cs.onSurface.withOpacity(0.6),
+                                      ),
                                     ),
                             ),
                           ),
@@ -2842,13 +3632,31 @@ class _EngineersPickerDialogState extends State<_EngineersPickerDialog> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(e.name, style: TextStyle(fontWeight: checked ? FontWeight.w600 : FontWeight.normal, color: checked ? cs.primary : cs.onSurface)),
-                                Text(e.roleLabel, style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.5))),
+                                Text(
+                                  e.name,
+                                  style: TextStyle(
+                                    fontWeight: checked
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                    color: checked ? cs.primary : cs.onSurface,
+                                  ),
+                                ),
+                                Text(
+                                  e.roleLabel,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: cs.onSurface.withOpacity(0.5),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                           if (checked)
-                            Icon(Icons.check_circle, color: cs.primary, size: 20),
+                            Icon(
+                              Icons.check_circle,
+                              color: cs.primary,
+                              size: 20,
+                            ),
                         ],
                       ),
                     ),
@@ -2864,7 +3672,12 @@ class _EngineersPickerDialogState extends State<_EngineersPickerDialog> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
                       child: const Text('Cancel'),
                     ),
                   ),
@@ -2879,7 +3692,9 @@ class _EngineersPickerDialogState extends State<_EngineersPickerDialog> {
                         backgroundColor: cs.primary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                       child: Text('Confirm (${_ids.length})'),
                     ),

@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../../../home/presentation/controllers/home_providers.dart';
-import '../../data/models/task_model.dart';
 import '../controllers/task_providers.dart';
 import '../widgets/task_attachments_widget.dart';
 import '../widgets/task_activity_widget.dart';

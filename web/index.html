@@ -42,5 +42,27 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
   <script src="flutter_bootstrap.js" async></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+
+    for (let registration of registrations) {
+      registration.update();
+    }
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      window.location.reload();
+    });
+
+    // Force update periodically (important for Edge)
+    setInterval(() => {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(reg => reg.update());
+      });
+    }, 10000);
+  });
+}
+</script>
 </body>
 </html>

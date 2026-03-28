@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/employee_model.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class EmployeeCard extends StatelessWidget {
   final EmployeeModel employee;
@@ -10,194 +11,165 @@ class EmployeeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final deptColor = _getDeptColor(employee.department);
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              // Avatar
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: _getDeptColor(
-                  employee.department,
-                  cs,
-                ).withValues(alpha: 0.15),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.slate800,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.slate700),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6, offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Avatar
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: deptColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: deptColor.withOpacity(0.3)),
+              ),
+              child: Center(
                 child: Text(
-                  employee.name.isNotEmpty
-                      ? employee.name[0].toUpperCase()
-                      : '?',
+                  employee.name.isNotEmpty ? employee.name[0].toUpperCase() : '?',
                   style: TextStyle(
-                    color: _getDeptColor(employee.department, cs),
+                    color: deptColor,
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+            ),
+            const SizedBox(width: 12),
 
-              // Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      employee.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      employee.jobTitleLabel,
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.6),
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        _DeptChip(
-                          label: employee.departmentLabel,
-                          color: _getDeptColor(employee.department, cs),
-                        ),
-                        const SizedBox(width: 6),
-                        _StatusChip(status: employee.status),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // Employee code
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    employee.employeeCode,
-                    style: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.4),
-                      fontSize: 11,
+                    employee.name,
+                    style: const TextStyle(
+                      color: AppColors.slate100,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
                     ),
                   ),
+                  const SizedBox(height: 2),
+                  Text(
+                    employee.jobTitleLabel,
+                    style: const TextStyle(color: AppColors.slate400, fontSize: 12),
+                  ),
                   const SizedBox(height: 8),
-                  // Rating stars
                   Row(
-                    children: List.generate(5, (i) {
-                      return Icon(
-                        i < employee.rating.round()
-                            ? Icons.star_rounded
-                            : Icons.star_outline_rounded,
-                        size: 14,
-                        color: Colors.amber,
-                      );
-                    }),
+                    children: [
+                      _Badge(label: employee.departmentLabel, color: deptColor),
+                      const SizedBox(width: 6),
+                      _StatusBadge(status: employee.status),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+
+            // Right side: code + rating
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.slate700,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    employee.employeeCode,
+                    style: const TextStyle(color: AppColors.slate400, fontSize: 10, fontFamily: 'monospace'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: List.generate(5, (i) {
+                    return Icon(
+                      i < employee.rating.round()
+                          ? Icons.star_rounded
+                          : Icons.star_outline_rounded,
+                      size: 13,
+                      color: i < employee.rating.round()
+                          ? AppColors.warning
+                          : AppColors.slate600,
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Color _getDeptColor(String dept, ColorScheme cs) {
+  Color _getDeptColor(String dept) {
     switch (dept) {
-      case 'electrical':
-        return Colors.amber.shade700;
-      case 'mechanical':
-        return Colors.blue.shade700;
-      case 'civil':
-        return Colors.brown.shade600;
-      case 'architecture':
-        return Colors.purple.shade600;
-      case 'management':
-        return cs.primary;
-      default:
-        return cs.primary;
+      case 'electrical':  return AppColors.warning;
+      case 'mechanical':  return AppColors.info;
+      case 'civil':       return const Color(0xFFA0785A);
+      case 'architecture':return Colors.purple;
+      case 'management':  return AppColors.cyan500;
+      default:            return AppColors.cyan600;
     }
   }
 }
 
-class _DeptChip extends StatelessWidget {
+class _Badge extends StatelessWidget {
   final String label;
   final Color color;
-
-  const _DeptChip({required this.label, required this.color});
+  const _Badge({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.25)),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
     );
   }
 }
 
-class _StatusChip extends StatelessWidget {
+class _StatusBadge extends StatelessWidget {
   final String status;
-
-  const _StatusChip({required this.status});
+  const _StatusBadge({required this.status});
 
   @override
   Widget build(BuildContext context) {
     Color color;
     String label;
     switch (status) {
-      case 'active':
-        color = Colors.green;
-        label = 'Active';
-        break;
-      case 'suspended':
-        color = Colors.orange;
-        label = 'Suspended';
-        break;
-      case 'resigned':
-        color = Colors.red;
-        label = 'Resigned';
-        break;
-      default:
-        color = Colors.grey;
-        label = status;
+      case 'active':    color = AppColors.success; label = 'Active'; break;
+      case 'suspended': color = AppColors.warning; label = 'Suspended'; break;
+      case 'resigned':  color = AppColors.error;   label = 'Resigned'; break;
+      default:          color = AppColors.slate400; label = status;
     }
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.25)),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
     );
   }
 }

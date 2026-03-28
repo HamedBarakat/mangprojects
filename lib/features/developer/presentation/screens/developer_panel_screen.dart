@@ -801,19 +801,21 @@ class _UsersListState extends ConsumerState<_UsersList> {
     final users = await ref
         .read(developerRepositoryProvider)
         .getOfficeUsers(widget.office.id);
-    if (mounted)
+    if (mounted) {
       setState(() {
         _users = users;
         _loading = false;
       });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading)
+    if (_loading) {
       return const Center(
         child: CircularProgressIndicator(color: Colors.amber),
       );
+    }
     final users = _users ?? [];
     if (users.isEmpty) {
       return Center(
@@ -1285,9 +1287,9 @@ class _EditUserSheetState extends ConsumerState<_EditUserSheet> {
   Future<void> _sendPasswordReset() async {
     setState(() => _saving = true);
     try {
-      await ref.read(authRepositoryProvider).sendPasswordResetEmail(
-        email: widget.user.email,
-      );
+      await ref
+          .read(authRepositoryProvider)
+          .sendPasswordResetEmail(email: widget.user.email);
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1328,7 +1330,8 @@ class _EditUserSheetState extends ConsumerState<_EditUserSheet> {
               alignment: Alignment.center,
               margin: const EdgeInsets.only(bottom: 16),
               child: Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
                   color: Colors.white24,
                   borderRadius: BorderRadius.circular(2),
@@ -1339,11 +1342,16 @@ class _EditUserSheetState extends ConsumerState<_EditUserSheet> {
             Text(
               'Edit User — ${widget.user.name}',
               style: const TextStyle(
-                color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 2),
-            Text(widget.user.roleLabel,
-                style: const TextStyle(color: Colors.white38, fontSize: 12)),
+            Text(
+              widget.user.roleLabel,
+              style: const TextStyle(color: Colors.white38, fontSize: 12),
+            ),
             const SizedBox(height: 16),
 
             // ── Active / Inactive toggle ──────────────────────────────────
@@ -1361,14 +1369,18 @@ class _EditUserSheetState extends ConsumerState<_EditUserSheet> {
               child: Row(
                 children: [
                   Icon(
-                    _isActive ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                    _isActive
+                        ? Icons.check_circle_rounded
+                        : Icons.cancel_rounded,
                     color: _isActive ? Colors.green : Colors.red,
                     size: 18,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      _isActive ? 'Account Active' : 'Account Inactive (Blocked)',
+                      _isActive
+                          ? 'Account Active'
+                          : 'Account Inactive (Blocked)',
                       style: TextStyle(
                         color: _isActive ? Colors.green : Colors.red,
                         fontWeight: FontWeight.w600,
@@ -1378,7 +1390,7 @@ class _EditUserSheetState extends ConsumerState<_EditUserSheet> {
                   ),
                   Switch(
                     value: _isActive,
-                    activeColor: Colors.green,
+                    activeThumbColor: Colors.green,
                     inactiveThumbColor: Colors.red,
                     onChanged: (_) => _toggleActive(),
                   ),
@@ -1403,16 +1415,23 @@ class _EditUserSheetState extends ConsumerState<_EditUserSheet> {
                   backgroundColor: Colors.amber,
                   foregroundColor: Colors.black,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 icon: _saving
                     ? const SizedBox(
-                        width: 16, height: 16,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.black))
+                          strokeWidth: 2,
+                          color: Colors.black,
+                        ),
+                      )
                     : const Icon(Icons.save_rounded, size: 18),
-                label: const Text('Save Email',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text(
+                  'Save Email',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 onPressed: _saving ? null : _saveEmail,
               ),
             ),
@@ -1430,11 +1449,14 @@ class _EditUserSheetState extends ConsumerState<_EditUserSheet> {
                   side: const BorderSide(color: Colors.orange),
                   foregroundColor: Colors.orange,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 icon: const Icon(Icons.lock_reset_rounded, size: 18),
-                label: const Text('Send Password Reset Email',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                label: const Text(
+                  'Send Password Reset Email',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
                 onPressed: _saving ? null : _sendPasswordReset,
               ),
             ),

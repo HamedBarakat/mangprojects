@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../home/presentation/controllers/home_providers.dart';
@@ -31,10 +32,13 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen>
 
   int _tabCount(dynamic user) {
     if (user == null) return 1;
-    if (user.isReviewer || user.role == 'management') return 2;
-    if (user.canManageTasks) return 2;
-    if (user.isDC) return 2;
-    return 1;
+    // ✅ All roles that need 2 tabs:
+    if (user.isTeamLeader) return 2;   // Pending Review | In Progress
+    if (user.isReviewer) return 2;      // Pending QC | All Tasks
+    if (user.isManagement) return 2;    // All Tasks | My Tasks
+    if (user.isDC) return 2;            // DC tasks | (same)
+    if (user.isAdmin) return 2;         // All Tasks | Completed
+    return 1;                            // Engineer: single filtered list
   }
 
   @override
@@ -48,7 +52,8 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen>
     final cs = Theme.of(context).colorScheme;
     final user = ref.watch(currentUserProvider).value;
     final isReviewer = user?.isReviewer ?? false;
-    final isTeamLeader = user?.canManageTasks ?? false;
+    // ✅ FIX: use isTeamLeader NOT canManageTasks (canManageTasks includes Admin)
+    final isTeamLeader = user?.isTeamLeader ?? false;
     final isClient = user?.role == 'client'; // ✅ جديد
 
     final qcBadge = ref.watch(pendingQcReviewCountProvider);
@@ -57,20 +62,60 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen>
     List<Widget> tabs = [];
     List<Widget> tabViews = [];
 
-    tabs = [const Tab(text: 'All Tasks'), const Tab(text: 'My Tasks')];
-
-    tabViews = [
-      _UnifiedTasksList(
-        statusFilter: 'all',
-        user: user,
-        showOnlyAssigned: false,
-      ),
-      _UnifiedTasksList(
-        statusFilter: _statusFilter,
-        user: user,
-        showOnlyAssigned: true,
-      ),
-    ];
+    if (isTeamLeader) {
+      // Team Leader: 2 tabs
+      // Tab 1 — Pending Review: tasks وصلته في مرحلة team_leader_review
+      // Tab 2 — In Progress: tasks مشاريعه النشطة (not_started + in_progress)
+      tabs = [
+        const Tab(text: 'Pending Review'),
+        const Tab(text: 'In Progress'),
+      ];
+      tabViews = [
+        _UnifiedTasksList(
+          statusFilter: 'team_leader_review',
+          user: user,
+          showOnlyAssigned: true,
+        ),
+        _UnifiedTasksList(
+          statusFilter: 'all',
+          user: user,
+          showOnlyAssigned: false,
+        ),
+      ];
+    } else if (isReviewer) {
+      // ✅ QC/Reviewer: Tab 1 = tasks pending his QC review, Tab 2 = all office tasks
+      tabs = [
+        const Tab(text: 'Pending QC'),
+        const Tab(text: 'All Tasks'),
+      ];
+      tabViews = [
+        _UnifiedTasksList(
+          statusFilter: 'qc_review',
+          user: user,
+          showOnlyAssigned: true,  // reviewerId == uid AND status == qc_review
+        ),
+        _UnifiedTasksList(
+          statusFilter: 'all',
+          user: user,
+          showOnlyAssigned: false, // all office tasks
+        ),
+      ];
+    } else {
+      // Engineer / Management / DC / Admin
+      tabs = [const Tab(text: 'All Tasks'), const Tab(text: 'My Tasks')];
+      tabViews = [
+        _UnifiedTasksList(
+          statusFilter: 'all',
+          user: user,
+          showOnlyAssigned: false,
+        ),
+        _UnifiedTasksList(
+          statusFilter: _statusFilter,
+          user: user,
+          showOnlyAssigned: true,
+        ),
+      ];
+    }
 
     final hasTabs = tabs.length > 1;
 
@@ -379,11 +424,14 @@ class _UnifiedTasksList extends ConsumerWidget {
   final bool showOnlyAssigned;
   final String statusFilter;
   final dynamic user;
+  // للـ Team Leader فقط: true = "My Tasks" (معيّن كمهندس), false = "Team Tasks" (مشاريعه)
+  final bool teamLeaderMyTasks;
 
   const _UnifiedTasksList({
     required this.statusFilter,
     required this.user,
     required this.showOnlyAssigned,
+    this.teamLeaderMyTasks = false,
   });
 
   @override
@@ -394,21 +442,112 @@ class _UnifiedTasksList extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
       data: (tasks) {
-        final baseTasks = tasks;
+        final uid = user?.uid ?? '';
+        // ✅ FIX: use isTeamLeader NOT canManageTasks
+        final isTeamLeader = user?.isTeamLeader == true;
+        final isReviewer   = user?.isReviewer == true;
+        final isDC         = user?.isDC == true;
+        final isEngineer   = user?.isEngineer == true;
+        // Admin + Management see all tasks — allVisibleTasksProvider
+        // already returns full office tasks for them
 
-        // 🔥 FIX: separate tabs logic clearly (NO duplication)
-        final isDC = user?.isDC == true;
-        final filtered = baseTasks.where((task) {
+        List<TaskModel> filtered;
+
+        // ══════════════════════════════════════════════════════════════════
+        // TEAM LEADER
+        // ══════════════════════════════════════════════════════════════════
+        if (isTeamLeader) {
           if (showOnlyAssigned) {
-            // DC: My Tasks = client_review tasks (للتوثيق والإرسال)
-            if (isDC) return task.status == 'client_review';
-            // Others: My Tasks = completed
-            return task.status == 'completed';
+            // Tab 1 "Pending Review" — tasks sent to him for approval
+            filtered = tasks
+                .where((t) =>
+                    t.teamLeaderId == uid &&
+                    t.status == 'team_leader_review')
+                .toList()
+              ..sort((a, b) => a.endDate.compareTo(b.endDate));
           } else {
-            // All Tasks → everything except completed
-            return task.status != 'completed';
+            // Tab 2 "In Progress" — active tasks in his projects
+            filtered = tasks
+                .where((t) =>
+                    t.teamLeaderId == uid &&
+                    (t.status == 'not_started' ||
+                     t.status == 'in_progress'))
+                .toList()
+              ..sort((a, b) => a.endDate.compareTo(b.endDate));
           }
-        }).toList();
+
+        // ══════════════════════════════════════════════════════════════════
+        // QC / REVIEWER
+        // ══════════════════════════════════════════════════════════════════
+        } else if (isReviewer) {
+          if (showOnlyAssigned) {
+            // Tab 1 "Pending QC" — tasks waiting for his QC review
+            filtered = tasks
+                .where((t) =>
+                    t.reviewerId == uid &&
+                    t.status == 'qc_review')
+                .toList()
+              ..sort((a, b) => a.endDate.compareTo(b.endDate));
+          } else {
+            // Tab 2 "All Tasks" — all office tasks (already from provider)
+            // Exclude completed to keep list manageable; apply status filter
+            if (statusFilter == 'all') {
+              filtered = tasks
+                  .where((t) => t.status != 'completed')
+                  .toList();
+            } else {
+              filtered = tasks
+                  .where((t) => t.status == statusFilter)
+                  .toList();
+            }
+          }
+
+        // ══════════════════════════════════════════════════════════════════
+        // DC
+        // ══════════════════════════════════════════════════════════════════
+        } else if (isDC) {
+          // DC always sees client_review tasks (for documentation & dispatch)
+          filtered = tasks
+              .where((t) => t.status == 'client_review')
+              .toList();
+
+        // ══════════════════════════════════════════════════════════════════
+        // ENGINEER
+        // ══════════════════════════════════════════════════════════════════
+        } else if (isEngineer) {
+          // allVisibleTasksProvider already returns assignedEngineerIds tasks
+          // showOnlyAssigned has no extra meaning here — same data set
+          if (statusFilter == 'all') {
+            filtered = tasks
+                .where((t) => t.status != 'completed')
+                .toList();
+          } else {
+            filtered = tasks
+                .where((t) => t.status == statusFilter)
+                .toList();
+          }
+
+        // ══════════════════════════════════════════════════════════════════
+        // ADMIN / MANAGEMENT — see all, filtered by status
+        // ══════════════════════════════════════════════════════════════════
+        } else {
+          if (showOnlyAssigned) {
+            // "My Tasks" for Admin = tasks completed (archive view)
+            filtered = tasks
+                .where((t) => t.status == 'completed')
+                .toList();
+          } else {
+            if (statusFilter == 'all') {
+              filtered = tasks
+                  .where((t) => t.status != 'completed')
+                  .toList();
+            } else {
+              filtered = tasks
+                  .where((t) => t.status == statusFilter)
+                  .toList();
+            }
+          }
+        }
 
         if (filtered.isEmpty) {
           return const _EmptyState(
@@ -735,54 +874,7 @@ class _TaskCard extends StatelessWidget {
 
               if (task.taskLink.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: () async {
-                    final uri = Uri.tryParse(task.taskLink);
-                    if (uri != null && await canLaunchUrl(uri)) {
-                      await launchUrl(
-                        uri,
-                        mode: LaunchMode.externalApplication,
-                      );
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.blue.withOpacity(0.25)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.link_rounded,
-                          size: 15,
-                          color: Colors.blue,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            task.taskLink,
-                            style: const TextStyle(
-                              color: Colors.blue,
-                              fontSize: 12,
-                              decoration: TextDecoration.underline,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const Icon(
-                          Icons.open_in_new_rounded,
-                          size: 14,
-                          color: Colors.blue,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                _TaskLinkRow(link: task.taskLink),
               ],
 
               if (task.teamLeaderReviewNotes.isNotEmpty) ...[
@@ -986,19 +1078,23 @@ class _TaskCard extends StatelessWidget {
     BuildContext context, {
     required bool reject,
   }) async {
+    final container = ProviderScope.containerOf(context);
     final notes = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
-      builder: (_) => _TaskReviewSheet(
-        task: task,
-        title: reject ? 'Reject & Return to Engineers' : 'Send to QC',
-        confirmText: reject ? 'Reject' : 'Send to QC',
-        confirmColor: reject ? Colors.red : null,
-        notesHint: reject
-            ? 'Enter notes for engineers...'
-            : 'Optional notes...',
+      builder: (_) => UncontrolledProviderScope(
+        container: container,
+        child: _TaskReviewSheet(
+          task: task,
+          title: reject ? 'Reject & Return to Engineers' : 'Send to QC',
+          confirmText: reject ? 'Reject' : 'Send to QC',
+          confirmColor: reject ? Colors.red : null,
+          notesHint: reject
+              ? 'Enter notes for engineers...'
+              : 'Optional notes...',
+        ),
       ),
     );
 
@@ -1027,17 +1123,21 @@ class _TaskCard extends StatelessWidget {
   }
 
   Future<void> _qcAction(BuildContext context, {required bool reject}) async {
+    final container = ProviderScope.containerOf(context);
     final notes = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
-      builder: (_) => _TaskReviewSheet(
-        task: task,
-        title: reject ? 'Reject Task' : 'Approve to Client',
-        confirmText: 'Confirm',
-        confirmColor: reject ? Colors.red : null,
-        notesHint: reject ? 'Enter notes...' : 'Optional notes...',
+      builder: (_) => UncontrolledProviderScope(
+        container: container,
+        child: _TaskReviewSheet(
+          task: task,
+          title: reject ? 'Reject Task' : 'Approve to Client',
+          confirmText: 'Confirm',
+          confirmColor: reject ? Colors.red : null,
+          notesHint: reject ? 'Enter notes...' : 'Optional notes...',
+        ),
       ),
     );
 
@@ -1615,3 +1715,106 @@ final pendingClientReviewTasksProvider = StreamProvider<List<TaskModel>>((ref) {
             snapshot.docs.map((doc) => TaskModel.fromFirestore(doc)).toList(),
       );
 });
+
+// ── Task Link Row — نسخ + فتح (web + local paths) ────────────────────────────
+class _TaskLinkRow extends StatelessWidget {
+  final String link;
+  const _TaskLinkRow({required this.link});
+
+  bool get _isLocal =>
+      link.startsWith('\\\\') ||
+      link.startsWith('//') ||
+      RegExp(r'^[A-Za-z]:[\\\/]').hasMatch(link);
+
+  bool get _isWeb =>
+      link.startsWith('http://') || link.startsWith('https://');
+
+  Future<void> _copy(BuildContext context) async {
+    await Clipboard.setData(ClipboardData(text: link));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Link copied ✓'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _open() async {
+    final uri = Uri.tryParse(link);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _isLocal ? Colors.orange.shade700 : Colors.blue;
+    final icon = _isLocal
+        ? Icons.storage_rounded
+        : _isWeb
+            ? Icons.open_in_new_rounded
+            : Icons.link_rounded;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              link,
+              style: TextStyle(
+                color: color,
+                fontSize: 11.5,
+                decoration: _isWeb ? TextDecoration.underline : null,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          InkWell(
+            onTap: () => _copy(context),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Tooltip(
+                message: 'Copy',
+                child: Icon(Icons.copy_rounded, size: 14, color: color),
+              ),
+            ),
+          ),
+          if (_isWeb) ...[
+            const SizedBox(width: 2),
+            InkWell(
+              onTap: _open,
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Tooltip(
+                  message: 'Open in browser',
+                  child: Icon(Icons.launch_rounded, size: 14, color: color),
+                ),
+              ),
+            ),
+          ],
+          if (_isLocal) ...[
+            const SizedBox(width: 2),
+            Tooltip(
+              message: 'Copy path, paste in File Explorer',
+              child: Icon(Icons.info_outline_rounded,
+                  size: 13, color: color.withOpacity(0.6)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

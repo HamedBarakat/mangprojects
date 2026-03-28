@@ -16,7 +16,6 @@ class OfficeLogoScreen extends ConsumerStatefulWidget {
 
 class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
     with TickerProviderStateMixin {
-
   late AnimationController _entryCtrl;
   late AnimationController _bgCtrl;
   late AnimationController _pulseCtrl;
@@ -34,21 +33,46 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
   @override
   void initState() {
     super.initState();
-    _entryCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
-    _bgCtrl    = AnimationController(vsync: this, duration: const Duration(seconds: 20))..repeat();
-    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2800))..repeat(reverse: true);
-    _orbitCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat();
-    _floatCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat(reverse: true);
+    _entryCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _bgCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 20),
+    )..repeat();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    )..repeat(reverse: true);
+    _orbitCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat();
+    _floatCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true);
 
-    _fadeAnim  = CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
-    _scaleAnim = Tween<double>(begin: 0.82, end: 1.0)
-        .animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutBack));
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.09), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
-    _bgRotate  = Tween<double>(begin: 0, end: 2 * math.pi).animate(_bgCtrl);
-    _pulse     = Tween<double>(begin: 0.65, end: 1.0).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
-    _orbit     = Tween<double>(begin: 0, end: 2 * math.pi).animate(_orbitCtrl);
-    _float     = Tween<double>(begin: -10, end: 10).animate(CurvedAnimation(parent: _floatCtrl, curve: Curves.easeInOut));
+    _fadeAnim = CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
+    _scaleAnim = Tween<double>(
+      begin: 0.82,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutBack));
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.09),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
+    _bgRotate = Tween<double>(begin: 0, end: 2 * math.pi).animate(_bgCtrl);
+    _pulse = Tween<double>(
+      begin: 0.65,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+    _orbit = Tween<double>(begin: 0, end: 2 * math.pi).animate(_orbitCtrl);
+    _float = Tween<double>(
+      begin: -10,
+      end: 10,
+    ).animate(CurvedAnimation(parent: _floatCtrl, curve: Curves.easeInOut));
 
     _entryCtrl.forward();
   }
@@ -64,11 +88,14 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
   }
 
   void _continue() {
-    Navigator.of(context).pushReplacement(PageRouteBuilder(
-      pageBuilder: (_, _, _) => const LoginScreen(),
-      transitionsBuilder: (_, anim, _, child) => FadeTransition(opacity: anim, child: child),
-      transitionDuration: const Duration(milliseconds: 600),
-    ));
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (_, _, _) => const LoginScreen(),
+        transitionsBuilder: (_, anim, _, child) =>
+            FadeTransition(opacity: anim, child: child),
+        transitionDuration: const Duration(milliseconds: 600),
+      ),
+    );
   }
 
   @override
@@ -84,8 +111,11 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
           Positioned.fill(
             child: AnimatedBuilder(
               animation: Listenable.merge([_bgCtrl, _pulseCtrl]),
-              builder: (_, __) => CustomPaint(
-                painter: _SkyBgPainter(rotation: _bgRotate.value, pulse: _pulse.value),
+              builder: (_, _) => CustomPaint(
+                painter: _SkyBgPainter(
+                  rotation: _bgRotate.value,
+                  pulse: _pulse.value,
+                ),
               ),
             ),
           ),
@@ -93,16 +123,18 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
           // ── Radial glow center ──────────────────────────────────────────
           AnimatedBuilder(
             animation: _pulseCtrl,
-            builder: (_, __) => Center(
+            builder: (_, _) => Center(
               child: Container(
                 width: size.width * 0.85,
                 height: size.width * 0.85,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: RadialGradient(colors: [
-                    const Color(0xFF0288D1).withOpacity(0.18 * _pulse.value),
-                    Colors.transparent,
-                  ]),
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF0288D1).withOpacity(0.18 * _pulse.value),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -111,7 +143,7 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
           // ── Orbiting rings around logo ──────────────────────────────────
           AnimatedBuilder(
             animation: _orbitCtrl,
-            builder: (_, __) => Positioned.fill(
+            builder: (_, _) => Positioned.fill(
               child: CustomPaint(
                 painter: _OrbitRingsPainter(
                   angle: _orbit.value,
@@ -124,8 +156,10 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
           // ── Floating particles ──────────────────────────────────────────
           AnimatedBuilder(
             animation: _floatCtrl,
-            builder: (_, __) => Positioned.fill(
-              child: CustomPaint(painter: _SkyParticlesPainter(offset: _float.value)),
+            builder: (_, _) => Positioned.fill(
+              child: CustomPaint(
+                painter: _SkyParticlesPainter(offset: _float.value),
+              ),
             ),
           ),
 
@@ -144,15 +178,25 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
 
                       // ── Welcome badge ───────────────────────────────────
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          border: Border.all(color: const Color(0xFF29B6F6).withOpacity(0.45)),
+                          border: Border.all(
+                            color: const Color(0xFF29B6F6).withOpacity(0.45),
+                          ),
                           borderRadius: BorderRadius.circular(20),
                           color: const Color(0xFF0288D1).withOpacity(0.1),
                         ),
                         child: const Text(
                           'WELCOME TO',
-                          style: TextStyle(fontSize: 9, letterSpacing: 3.5, color: Color(0xFF81D4FA), fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontSize: 9,
+                            letterSpacing: 3.5,
+                            color: Color(0xFF81D4FA),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
 
@@ -164,19 +208,29 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
                         builder: (_, child) => Transform.scale(
                           scale: _scaleAnim.value,
                           child: Container(
-                            width: 148, height: 148,
+                            width: 148,
+                            height: 148,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(34),
                               color: const Color(0xFF041624),
-                              border: Border.all(color: const Color(0xFF0288D1).withOpacity(0.35), width: 2),
+                              border: Border.all(
+                                color: const Color(
+                                  0xFF0288D1,
+                                ).withOpacity(0.35),
+                                width: 2,
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF29B6F6).withOpacity(0.35 * _pulse.value),
-                                  blurRadius: 40, spreadRadius: 6,
+                                  color: const Color(
+                                    0xFF29B6F6,
+                                  ).withOpacity(0.35 * _pulse.value),
+                                  blurRadius: 40,
+                                  spreadRadius: 6,
                                 ),
                                 BoxShadow(
                                   color: Colors.black.withOpacity(0.5),
-                                  blurRadius: 20, offset: const Offset(0, 10),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
                                 ),
                               ],
                             ),
@@ -187,10 +241,24 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
                           borderRadius: BorderRadius.circular(32),
                           child: hasLogo
                               ? (widget.office.logo.startsWith('data:image')
-                                    ? Image.memory(base64Decode(widget.office.logo.split(',').last), fit: BoxFit.contain,
-                                        errorBuilder: (_, _, _) => _SkyDefaultLogo(name: widget.office.name))
-                                    : Image.network(widget.office.logo, fit: BoxFit.contain,
-                                        errorBuilder: (_, _, _) => _SkyDefaultLogo(name: widget.office.name)))
+                                    ? Image.memory(
+                                        base64Decode(
+                                          widget.office.logo.split(',').last,
+                                        ),
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, _, _) =>
+                                            _SkyDefaultLogo(
+                                              name: widget.office.name,
+                                            ),
+                                      )
+                                    : Image.network(
+                                        widget.office.logo,
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, _, _) =>
+                                            _SkyDefaultLogo(
+                                              name: widget.office.name,
+                                            ),
+                                      ))
                               : _SkyDefaultLogo(name: widget.office.name),
                         ),
                       ),
@@ -206,8 +274,11 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
                           widget.office.name,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5, height: 1.2,
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                            height: 1.2,
                           ),
                         ),
                       ),
@@ -216,15 +287,25 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
 
                       // ── Code badge ──────────────────────────────────────
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 7,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF0277BD).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFF29B6F6).withOpacity(0.3)),
+                          border: Border.all(
+                            color: const Color(0xFF29B6F6).withOpacity(0.3),
+                          ),
                         ),
                         child: Text(
                           '#${widget.office.code}',
-                          style: const TextStyle(color: Color(0xFF4FC3F7), fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 1.8),
+                          style: const TextStyle(
+                            color: Color(0xFF4FC3F7),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.8,
+                          ),
                         ),
                       ),
 
@@ -234,13 +315,18 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
                       AnimatedBuilder(
                         animation: _pulseCtrl,
                         builder: (_, child) => Container(
-                          width: double.infinity, height: 56,
+                          width: double.infinity,
+                          height: 56,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF0288D1).withOpacity(0.45 * _pulse.value),
-                                blurRadius: 26, spreadRadius: 2, offset: const Offset(0, 6),
+                                color: const Color(
+                                  0xFF0288D1,
+                                ).withOpacity(0.45 * _pulse.value),
+                                blurRadius: 26,
+                                spreadRadius: 2,
+                                offset: const Offset(0, 6),
                               ),
                             ],
                           ),
@@ -250,15 +336,29 @@ class _OfficeLogoScreenState extends ConsumerState<OfficeLogoScreen>
                           onPressed: _continue,
                           style: FilledButton.styleFrom(
                             backgroundColor: const Color(0xFF0277BD),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                             elevation: 0,
                           ),
                           child: const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text('Continue to Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.3)),
+                              Text(
+                                'Continue to Login',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
                               SizedBox(width: 8),
-                              Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
                             ],
                           ),
                         ),
@@ -291,7 +391,8 @@ class _SkyDefaultLogo extends StatelessWidget {
       children: [
         CustomPaint(painter: _SkyLogoBgPainter(), size: const Size(148, 148)),
         Container(
-          width: 76, height: 76,
+          width: 76,
+          height: 76,
           decoration: const BoxDecoration(
             shape: BoxShape.circle,
             gradient: LinearGradient(
@@ -302,7 +403,15 @@ class _SkyDefaultLogo extends StatelessWidget {
             boxShadow: [BoxShadow(color: Color(0x6629B6F6), blurRadius: 18)],
           ),
           child: Center(
-            child: Text(initial, style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+            child: Text(
+              initial,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
+              ),
+            ),
           ),
         ),
       ],
@@ -313,21 +422,57 @@ class _SkyDefaultLogo extends StatelessWidget {
 class _SkyLogoBgPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()..color = const Color(0xFF29B6F6).withOpacity(0.1)..strokeWidth = 0.5..style = PaintingStyle.stroke;
+    final gridPaint = Paint()
+      ..color = const Color(0xFF29B6F6).withOpacity(0.1)
+      ..strokeWidth = 0.5
+      ..style = PaintingStyle.stroke;
     const step = 14.0;
-    for (double x = 0; x <= size.width; x += step) canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    for (double y = 0; y <= size.height; y += step) canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    final bp = Paint()..color = const Color(0xFF29B6F6).withOpacity(0.28)..strokeWidth = 1.5..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+    for (double x = 0; x <= size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = 0; y <= size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+    final bp = Paint()
+      ..color = const Color(0xFF29B6F6).withOpacity(0.28)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
     const b = 16.0;
     canvas.drawLine(const Offset(8, 8 + b), const Offset(8, 8), bp);
     canvas.drawLine(const Offset(8, 8), const Offset(8 + b, 8), bp);
-    canvas.drawLine(Offset(size.width - 8, 8 + b), Offset(size.width - 8, 8), bp);
-    canvas.drawLine(Offset(size.width - 8, 8), Offset(size.width - 8 - b, 8), bp);
-    canvas.drawLine(Offset(8, size.height - 8 - b), Offset(8, size.height - 8), bp);
-    canvas.drawLine(Offset(8, size.height - 8), Offset(8 + b, size.height - 8), bp);
-    canvas.drawLine(Offset(size.width - 8, size.height - 8 - b), Offset(size.width - 8, size.height - 8), bp);
-    canvas.drawLine(Offset(size.width - 8, size.height - 8), Offset(size.width - 8 - b, size.height - 8), bp);
+    canvas.drawLine(
+      Offset(size.width - 8, 8 + b),
+      Offset(size.width - 8, 8),
+      bp,
+    );
+    canvas.drawLine(
+      Offset(size.width - 8, 8),
+      Offset(size.width - 8 - b, 8),
+      bp,
+    );
+    canvas.drawLine(
+      Offset(8, size.height - 8 - b),
+      Offset(8, size.height - 8),
+      bp,
+    );
+    canvas.drawLine(
+      Offset(8, size.height - 8),
+      Offset(8 + b, size.height - 8),
+      bp,
+    );
+    canvas.drawLine(
+      Offset(size.width - 8, size.height - 8 - b),
+      Offset(size.width - 8, size.height - 8),
+      bp,
+    );
+    canvas.drawLine(
+      Offset(size.width - 8, size.height - 8),
+      Offset(size.width - 8 - b, size.height - 8),
+      bp,
+    );
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter _) => false;
 }
@@ -344,7 +489,9 @@ class _SkyBgPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // dot grid
-    final dotPaint = Paint()..color = const Color(0xFF29B6F6).withOpacity(0.07)..style = PaintingStyle.fill;
+    final dotPaint = Paint()
+      ..color = const Color(0xFF29B6F6).withOpacity(0.07)
+      ..style = PaintingStyle.fill;
     const step = 28.0;
     for (double x = 0; x <= size.width; x += step) {
       for (double y = 0; y <= size.height; y += step) {
@@ -353,7 +500,10 @@ class _SkyBgPainter extends CustomPainter {
     }
 
     // horizontal scan lines
-    final scanPaint = Paint()..color = const Color(0xFF0288D1).withOpacity(0.04)..strokeWidth = 0.5..style = PaintingStyle.stroke;
+    final scanPaint = Paint()
+      ..color = const Color(0xFF0288D1).withOpacity(0.04)
+      ..strokeWidth = 0.5
+      ..style = PaintingStyle.stroke;
     for (double y = 0; y <= size.height; y += 18) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), scanPaint);
     }
@@ -361,38 +511,101 @@ class _SkyBgPainter extends CustomPainter {
     // rotating hexagon rings (top-center)
     final cx = size.width * 0.5;
     final cy = size.height * 0.44;
-    _drawHex(canvas, Offset(cx, cy), 110, rotation, const Color(0xFF29B6F6), 0.07);
-    _drawHex(canvas, Offset(cx, cy), 72,  -rotation * 1.3, const Color(0xFF0288D1), 0.10);
-    _drawHex(canvas, Offset(cx, cy), 42,  rotation * 2.0, const Color(0xFF81D4FA), 0.08);
+    _drawHex(
+      canvas,
+      Offset(cx, cy),
+      110,
+      rotation,
+      const Color(0xFF29B6F6),
+      0.07,
+    );
+    _drawHex(
+      canvas,
+      Offset(cx, cy),
+      72,
+      -rotation * 1.3,
+      const Color(0xFF0288D1),
+      0.10,
+    );
+    _drawHex(
+      canvas,
+      Offset(cx, cy),
+      42,
+      rotation * 2.0,
+      const Color(0xFF81D4FA),
+      0.08,
+    );
 
     // concentric arcs top-right
-    final arcPaint = Paint()..color = const Color(0xFF0288D1).withOpacity(0.12 * pulse)..strokeWidth = 1.0..style = PaintingStyle.stroke;
+    final arcPaint = Paint()
+      ..color = const Color(0xFF0288D1).withOpacity(0.12 * pulse)
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
     for (double r = 60; r <= 180; r += 40) {
       canvas.drawArc(
-        Rect.fromCenter(center: Offset(size.width, 0), width: r * 2, height: r * 2),
-        math.pi / 2, math.pi / 2, false, arcPaint,
+        Rect.fromCenter(
+          center: Offset(size.width, 0),
+          width: r * 2,
+          height: r * 2,
+        ),
+        math.pi / 2,
+        math.pi / 2,
+        false,
+        arcPaint,
       );
     }
 
     // circuit lines bottom
-    final circPaint = Paint()..color = const Color(0xFF29B6F6).withOpacity(0.1)..strokeWidth = 0.8..style = PaintingStyle.stroke;
+    final circPaint = Paint()
+      ..color = const Color(0xFF29B6F6).withOpacity(0.1)
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke;
     _drawCircuit(canvas, size, circPaint);
 
     // dimension cross bottom-left
-    final dimPaint = Paint()..color = const Color(0xFF4FC3F7).withOpacity(0.15)..strokeWidth = 0.7..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(size.width * 0.06, size.height * 0.72), Offset(size.width * 0.06, size.height * 0.9), dimPaint);
-    canvas.drawLine(Offset(size.width * 0.03, size.height * 0.72), Offset(size.width * 0.09, size.height * 0.72), dimPaint);
-    canvas.drawLine(Offset(size.width * 0.03, size.height * 0.9), Offset(size.width * 0.09, size.height * 0.9), dimPaint);
+    final dimPaint = Paint()
+      ..color = const Color(0xFF4FC3F7).withOpacity(0.15)
+      ..strokeWidth = 0.7
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(
+      Offset(size.width * 0.06, size.height * 0.72),
+      Offset(size.width * 0.06, size.height * 0.9),
+      dimPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width * 0.03, size.height * 0.72),
+      Offset(size.width * 0.09, size.height * 0.72),
+      dimPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width * 0.03, size.height * 0.9),
+      Offset(size.width * 0.09, size.height * 0.9),
+      dimPaint,
+    );
   }
 
-  void _drawHex(Canvas canvas, Offset c, double r, double angle, Color color, double opacity) {
-    final paint = Paint()..color = color.withOpacity(opacity)..strokeWidth = 1.1..style = PaintingStyle.stroke;
+  void _drawHex(
+    Canvas canvas,
+    Offset c,
+    double r,
+    double angle,
+    Color color,
+    double opacity,
+  ) {
+    final paint = Paint()
+      ..color = color.withOpacity(opacity)
+      ..strokeWidth = 1.1
+      ..style = PaintingStyle.stroke;
     final path = Path();
     for (int i = 0; i < 6; i++) {
       final a = angle + i * math.pi / 3;
       final x = c.dx + r * math.cos(a);
       final y = c.dy + r * math.sin(a);
-      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
     }
     path.close();
     canvas.drawPath(path, paint);
@@ -409,7 +622,9 @@ class _SkyBgPainter extends CustomPainter {
       ..lineTo(size.width * 0.35, size.height * 0.82);
     canvas.drawPath(path, paint);
     // nodes
-    final nodePaint = Paint()..color = const Color(0xFF29B6F6).withOpacity(0.2)..style = PaintingStyle.fill;
+    final nodePaint = Paint()
+      ..color = const Color(0xFF29B6F6).withOpacity(0.2)
+      ..style = PaintingStyle.fill;
     for (final pt in [
       Offset(size.width * 0.25, size.height * 0.75),
       Offset(size.width * 0.25, size.height * 0.82),
@@ -420,7 +635,8 @@ class _SkyBgPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SkyBgPainter old) => old.rotation != rotation || old.pulse != pulse;
+  bool shouldRepaint(_SkyBgPainter old) =>
+      old.rotation != rotation || old.pulse != pulse;
 }
 
 // ── Orbiting rings painter ───────────────────────────────────────────────────
@@ -432,7 +648,9 @@ class _OrbitRingsPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.stroke..strokeWidth = 1.0;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
 
     // outer orbit ring
     paint.color = const Color(0xFF29B6F6).withOpacity(0.08);
@@ -441,10 +659,14 @@ class _OrbitRingsPainter extends CustomPainter {
     // orbiting dot on outer ring
     paint.color = const Color(0xFF81D4FA).withOpacity(0.6);
     paint.style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(
-      center.dx + 110 * math.cos(angle),
-      center.dy + 110 * math.sin(angle),
-    ), 3.5, paint);
+    canvas.drawCircle(
+      Offset(
+        center.dx + 110 * math.cos(angle),
+        center.dy + 110 * math.sin(angle),
+      ),
+      3.5,
+      paint,
+    );
 
     // inner orbit ring
     paint.style = PaintingStyle.stroke;
@@ -454,10 +676,14 @@ class _OrbitRingsPainter extends CustomPainter {
     // orbiting dot on inner ring (opposite direction)
     paint.style = PaintingStyle.fill;
     paint.color = const Color(0xFF4FC3F7).withOpacity(0.5);
-    canvas.drawCircle(Offset(
-      center.dx + 78 * math.cos(-angle * 1.5),
-      center.dy + 78 * math.sin(-angle * 1.5),
-    ), 2.5, paint);
+    canvas.drawCircle(
+      Offset(
+        center.dx + 78 * math.cos(-angle * 1.5),
+        center.dy + 78 * math.sin(-angle * 1.5),
+      ),
+      2.5,
+      paint,
+    );
   }
 
   @override
@@ -470,12 +696,20 @@ class _SkyParticlesPainter extends CustomPainter {
   final double offset;
   const _SkyParticlesPainter({required this.offset});
   static const _pts = [
-    [0.12, 0.22], [0.88, 0.18], [0.05, 0.60], [0.92, 0.55],
-    [0.55, 0.92], [0.30, 0.80], [0.75, 0.75], [0.20, 0.40],
+    [0.12, 0.22],
+    [0.88, 0.18],
+    [0.05, 0.60],
+    [0.92, 0.55],
+    [0.55, 0.92],
+    [0.30, 0.80],
+    [0.75, 0.75],
+    [0.20, 0.40],
   ];
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.stroke..strokeWidth = 0.9;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.9;
     for (int i = 0; i < _pts.length; i++) {
       final floatY = (i.isEven ? offset : -offset) * 0.55;
       final cx = size.width * _pts[i][0];
@@ -488,7 +722,12 @@ class _SkyParticlesPainter extends CustomPainter {
         canvas.drawLine(Offset(cx, cy - r), Offset(cx, cy + r), paint);
       } else if (i % 4 == 1) {
         // diamond
-        final path = Path()..moveTo(cx, cy - r)..lineTo(cx + r, cy)..lineTo(cx, cy + r)..lineTo(cx - r, cy)..close();
+        final path = Path()
+          ..moveTo(cx, cy - r)
+          ..lineTo(cx + r, cy)
+          ..lineTo(cx, cy + r)
+          ..lineTo(cx - r, cy)
+          ..close();
         canvas.drawPath(path, paint);
       } else if (i % 4 == 2) {
         canvas.drawCircle(Offset(cx, cy), r, paint);
@@ -497,14 +736,18 @@ class _SkyParticlesPainter extends CustomPainter {
         final path = Path();
         for (int j = 0; j < 6; j++) {
           final a = j * math.pi / 3;
-          if (j == 0) path.moveTo(cx + r * math.cos(a), cy + r * math.sin(a));
-          else path.lineTo(cx + r * math.cos(a), cy + r * math.sin(a));
+          if (j == 0) {
+            path.moveTo(cx + r * math.cos(a), cy + r * math.sin(a));
+          } else {
+            path.lineTo(cx + r * math.cos(a), cy + r * math.sin(a));
+          }
         }
         path.close();
         canvas.drawPath(path, paint);
       }
     }
   }
+
   @override
   bool shouldRepaint(_SkyParticlesPainter old) => old.offset != offset;
 }

@@ -261,7 +261,7 @@ class _TaskCommentsSectionState extends ConsumerState<TaskCommentsSection> {
                       ),
                     ),
               loading: () => const SizedBox(),
-              error: (_, __) => const SizedBox(),
+              error: (_, _) => const SizedBox(),
             ),
           ],
         ),
@@ -397,7 +397,7 @@ class _TaskCommentsSectionState extends ConsumerState<TaskCommentsSection> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: sortedComments.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (_, index) => _CommentBubble(
                 comment: sortedComments[index],
                 isMe: sortedComments[index].authorId == currentUser?.uid,
@@ -467,7 +467,7 @@ class _CommentBubble extends StatelessWidget {
                 child: Image.network(
                   comment.imageUrl!,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  errorBuilder: (_, _, _) => Container(
                     height: 120,
                     width: 220,
                     alignment: Alignment.center,

@@ -15,8 +15,6 @@ final projectsProvider = StreamProvider<List<ProjectModel>>((ref) {
   return userAsync.when(
     data: (user) {
       if (user == null) return const Stream.empty();
-      // canSeeAllProjects: Admin + QC + Management + DC + Section Head + COO + Principal
-      // كلهم يشوفوا كل مشاريع المكتب
       return ref.watch(projectRepositoryProvider).watchProjects(user.officeId);
     },
     loading: () => const Stream.empty(),
@@ -36,7 +34,7 @@ final singleProjectProvider = StreamProvider.family<ProjectModel?, String>((
 final projectStatusFilterProvider = StateProvider<String>((ref) => 'all');
 final projectTypeFilterProvider = StateProvider<String>((ref) => 'all');
 
-// ── Filtered projects ─────────────────────────────────────────────────────────
+// ── Filtered ALL projects (Admin / Reviewer يشوفوا الكل) ─────────────────────
 final filteredProjectsProvider = Provider<List<ProjectModel>>((ref) {
   final projectsAsync = ref.watch(projectsProvider);
   final statusFilter = ref.watch(projectStatusFilterProvider);
@@ -49,7 +47,35 @@ final filteredProjectsProvider = Provider<List<ProjectModel>>((ref) {
         filtered = filtered.where((p) => p.status == statusFilter).toList();
       }
       if (typeFilter != 'all') {
-        // الـ type بيتخزن كـ string كامل مثل "Shop Drawings" وليس snake_case
+        filtered = filtered.where((p) => p.type == typeFilter).toList();
+      }
+      return filtered;
+    },
+    loading: () => [],
+    error: (_, _) => [],
+  );
+});
+
+// ── Filtered MY projects (Team Leader: فقط المشاريع اللي هو teamLeader عليها) ─
+final filteredMyProjectsProvider = Provider<List<ProjectModel>>((ref) {
+  final user = ref.watch(currentUserProvider).value;
+  final projectsAsync = ref.watch(projectsProvider);
+  final statusFilter = ref.watch(projectStatusFilterProvider);
+  final typeFilter = ref.watch(projectTypeFilterProvider);
+
+  return projectsAsync.when(
+    data: (projects) {
+      var filtered = projects;
+
+      // Team Leader يشوف مشاريعه هو فقط
+      if (user != null && user.isTeamLeader) {
+        filtered = filtered.where((p) => p.teamLeaderId == user.uid).toList();
+      }
+
+      if (statusFilter != 'all') {
+        filtered = filtered.where((p) => p.status == statusFilter).toList();
+      }
+      if (typeFilter != 'all') {
         filtered = filtered.where((p) => p.type == typeFilter).toList();
       }
       return filtered;

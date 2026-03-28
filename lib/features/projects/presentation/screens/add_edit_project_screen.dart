@@ -896,18 +896,17 @@ class _ProjectTeamDropdowns extends ConsumerWidget {
           ..sort((a, b) => a.name.compareTo(b.name));
 
         // Team Leaders = admin + team_leader
-        final teamLeaders =
-            active.where((e) => e.isTeamLeader || e.isAdmin).toList();
+        final teamLeaders = active
+            .where((e) => e.isTeamLeader || e.isAdmin)
+            .toList();
 
         // QC = reviewer
         final reviewers = active.where((e) => e.isReviewer).toList();
 
         // PM = everyone active (المدير ممكن يكون أي موظف)
-        final allStaff = active
-            .where((e) => !e.isClient)
-            .toList();
+        final allStaff = active.where((e) => !e.isClient).toList();
 
-        InputDecoration _dec(String label, IconData icon) => InputDecoration(
+        InputDecoration dec(String label, IconData icon) => InputDecoration(
           labelText: label,
           prefixIcon: Icon(icon, color: cs.primary),
           filled: true,
@@ -934,19 +933,17 @@ class _ProjectTeamDropdowns extends ConsumerWidget {
           children: [
             // ── Team Leader ───────────────────────────────────────────
             DropdownButtonFormField<String>(
-              initialValue: teamLeaders.any((e) => e.uid == selectedTeamLeaderId)
+              initialValue:
+                  teamLeaders.any((e) => e.uid == selectedTeamLeaderId)
                   ? selectedTeamLeaderId
                   : '',
-              decoration: _dec('Team Leader', Icons.manage_accounts_outlined),
+              decoration: dec('Team Leader', Icons.manage_accounts_outlined),
               borderRadius: BorderRadius.circular(14),
               hint: const Text('Select Team Leader'),
               items: [
                 ...noneItem,
                 ...teamLeaders.map(
-                  (e) => DropdownMenuItem(
-                    value: e.uid,
-                    child: Text(e.name),
-                  ),
+                  (e) => DropdownMenuItem(value: e.uid, child: Text(e.name)),
                 ),
               ],
               onChanged: (id) {
@@ -965,16 +962,13 @@ class _ProjectTeamDropdowns extends ConsumerWidget {
               initialValue: reviewers.any((e) => e.uid == selectedQcId)
                   ? selectedQcId
                   : '',
-              decoration: _dec('QC Reviewer', Icons.verified_outlined),
+              decoration: dec('QC Reviewer', Icons.verified_outlined),
               borderRadius: BorderRadius.circular(14),
               hint: const Text('Select QC Reviewer'),
               items: [
                 ...noneItem,
                 ...reviewers.map(
-                  (e) => DropdownMenuItem(
-                    value: e.uid,
-                    child: Text(e.name),
-                  ),
+                  (e) => DropdownMenuItem(value: e.uid, child: Text(e.name)),
                 ),
               ],
               onChanged: (id) {
@@ -990,18 +984,16 @@ class _ProjectTeamDropdowns extends ConsumerWidget {
 
             // ── PM ────────────────────────────────────────────────────
             DropdownButtonFormField<String>(
-              initialValue:
-                  allStaff.any((e) => e.uid == selectedPmId) ? selectedPmId : '',
-              decoration: _dec('Project Manager (PM)', Icons.badge_outlined),
+              initialValue: allStaff.any((e) => e.uid == selectedPmId)
+                  ? selectedPmId
+                  : '',
+              decoration: dec('Project Manager (PM)', Icons.badge_outlined),
               borderRadius: BorderRadius.circular(14),
               hint: const Text('Select Project Manager'),
               items: [
                 ...noneItem,
                 ...allStaff.map(
-                  (e) => DropdownMenuItem(
-                    value: e.uid,
-                    child: Text(e.name),
-                  ),
+                  (e) => DropdownMenuItem(value: e.uid, child: Text(e.name)),
                 ),
               ],
               onChanged: (id) {
@@ -1020,7 +1012,10 @@ class _ProjectTeamDropdowns extends ConsumerWidget {
                 selectedPmId != null) ...[
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: cs.primaryContainer.withOpacity(0.4),
                   borderRadius: BorderRadius.circular(10),
@@ -1043,4 +1038,3 @@ class _ProjectTeamDropdowns extends ConsumerWidget {
     );
   }
 }
-

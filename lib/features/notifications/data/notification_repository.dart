@@ -8,10 +8,13 @@ class NotificationRepository {
   Stream<List<NotificationModel>> watchMyNotifications(String uid) {
     return _ref
         .where('recipientId', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots()
-        .map((s) => s.docs.map(NotificationModel.fromFirestore).toList());
+        .map((s) {
+          final list = s.docs.map(NotificationModel.fromFirestore).toList();
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        });
   }
 
   // ── عدد الغير مقروءة ─────────────────────────────────────────────────────

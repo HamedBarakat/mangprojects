@@ -20,6 +20,14 @@ service cloud.firestore {
       return isSignedIn() && currentUser().role == 'reviewer';
     }
 
+    function isTeamLeader() {
+      return isSignedIn() && currentUser().role == 'team_leader';
+    }
+
+    function isEngineer() {
+      return isSignedIn() && currentUser().role == 'engineer';
+    }
+
     function isDC() {
       return isSignedIn() && currentUser().role == 'dc';
     }
@@ -37,7 +45,6 @@ service cloud.firestore {
       );
     }
 
-    // Admin + QC + DC + Management + Section Head / COO / Principal
     function canSeeAll() {
       return isAdmin() || isReviewer() || isDC() || isManagement() || isSectionHeadOrAbove();
     }
@@ -46,12 +53,16 @@ service cloud.firestore {
       return isAdmin() || isReviewer();
     }
 
+    function isTeamLeaderOrAbove() {
+      return isAdmin() || isReviewer() || isTeamLeader() || isManagement();
+    }
+
     function belongsToOffice(officeId) {
       return isSignedIn() && currentUser().officeId == officeId;
     }
 
-    function isClientEngineer() {
-      return isSignedIn() && currentUser().role == 'client_engineer';
+    function isClientRole() {
+      return isSignedIn() && currentUser().role == 'client';
     }
 
     // ── Offices ─────────────────────────────────────────────────────────────
@@ -86,24 +97,44 @@ service cloud.firestore {
     match /projects/{projectId} {
       allow read: if isSignedIn() && (
         belongsToOffice(resource.data.officeId) ||
-        (isClientEngineer() && resource.data.clientId == currentUser().clientId)
+        (isClientRole() && resource.data.clientId == currentUser().clientId)
       );
       allow create: if isAdminOrReviewer();
-      allow update: if isAdminOrReviewer() || (isDC() && belongsToOffice(resource.data.officeId));
+
+      // Team Leader + Engineer مسموح لهم update المشروع
+      // لأن إضافة/تعديل Task يستدعي _recalculateProjectCompletion
+      allow update: if isAdminOrReviewer()
+        || (isDC() && belongsToOffice(resource.data.officeId))
+        || (isTeamLeader() && belongsToOffice(resource.data.officeId))
+        || (isEngineer() && belongsToOffice(resource.data.officeId));
+
       allow delete: if isAdmin();
+
+      // ✅ FIX: projects/{projectId}/tasks subcollection
+      // Used by _recalculateProjectCompletion to read tasks per project.
+      // Any signed-in user in the same office can read; write follows same
+      // rules as the root tasks collection.
+      match /tasks/{taskId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && isTeamLeaderOrAbove();
+      }
     }
 
-    // ── Tasks ────────────────────────────────────────────────────────────────
+    // ── Tasks (root collection) ───────────────────────────────────────────────
     match /tasks/{taskId} {
-      // السماح بالقراءة لأي موظف signed-in (الفلترة بتتم في الكود بـ officeId/projectId)
+      // Any signed-in user can read — filtering is done in code via officeId
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && (isAdminOrReviewer() || currentUser().role == 'team_leader');
+
+      // Admin + Reviewer + Team Leader + Management can create tasks
+      allow create: if isSignedIn() && isTeamLeaderOrAbove();
+
+      // Any employee in the same office can update (for status & progress changes)
       allow update: if isSignedIn() && (
         belongsToOffice(resource.data.officeId) || isDC()
       );
+
       allow delete: if isAdminOrReviewer();
 
-      // ── Task subcollections (comments + attachments) ──────────────────────
       match /comments/{commentId} {
         allow read, write: if isSignedIn();
       }
@@ -121,14 +152,11 @@ service cloud.firestore {
 
     // ── Notifications ────────────────────────────────────────────────────────
     match /notifications/{notifId} {
-      // كل موظف يقرأ إشعاراته فقط
       allow read: if isSignedIn() && (
         resource.data.recipientId == request.auth.uid ||
         isAdmin()
       );
-      // أي موظف مصرّح له يكتب إشعارات (batch send من الـ app)
       allow create: if isSignedIn();
-      // صاحب الإشعار يعدّله (markAsRead) أو الـ Admin
       allow update: if isSignedIn() && (
         resource.data.recipientId == request.auth.uid ||
         isAdmin()

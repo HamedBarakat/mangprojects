@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -32,7 +31,6 @@ final projectTasksProvider = StreamProvider.family<List<TaskModel>, String>((
 
 final myTasksProvider = StreamProvider<List<TaskModel>>((ref) async* {
   final user = await ref.watch(currentUserProvider.future);
-  debugPrint('[myTasksProvider] user=${user?.uid} role=${user?.role}');
   if (user == null) {
     yield const <TaskModel>[];
     return;
@@ -48,8 +46,8 @@ final myTasksProvider = StreamProvider<List<TaskModel>>((ref) async* {
   }
 
   await for (final tasks in stream) {
-    debugPrint('[myTasksProvider] tasks=${tasks.length}');
-    if (user.canManageTasks) {
+    if (user.isTeamLeader) {
+      // ✅ FIX: isTeamLeader only, not canManageTasks (which includes Admin)
       final map = <String, TaskModel>{};
       for (final task in tasks) {
         map[task.id] = task;
@@ -79,10 +77,8 @@ final teamLeaderReviewTasksProvider = StreamProvider<List<TaskModel>>((
   ref,
 ) async* {
   final user = await ref.watch(currentUserProvider.future);
-  debugPrint(
-    '[teamLeaderReviewTasksProvider] user=${user?.uid} role=${user?.role} canManage=${user?.canManageTasks}',
-  );
-  if (user == null || !user.canManageTasks) {
+  // ✅ FIX: use isTeamLeader only, not canManageTasks
+  if (user == null || !user.isTeamLeader) {
     yield const <TaskModel>[];
     return;
   }
@@ -92,9 +88,6 @@ final teamLeaderReviewTasksProvider = StreamProvider<List<TaskModel>>((
     final filtered =
         tasks.where((t) => t.status == 'team_leader_review').toList()
           ..sort((a, b) => a.endDate.compareTo(b.endDate));
-    debugPrint(
-      '[teamLeaderReviewTasksProvider] all=${tasks.length} filtered=${filtered.length}',
-    );
     yield filtered;
   }
 });
@@ -103,15 +96,13 @@ final pendingTeamLeaderReviewTasksProvider = teamLeaderReviewTasksProvider;
 
 final qcReviewTasksProvider = StreamProvider<List<TaskModel>>((ref) async* {
   final user = await ref.watch(currentUserProvider.future);
-  debugPrint(
-    '[qcReviewTasksProvider] user=${user?.uid} role=${user?.role} isReviewer=${user?.isReviewer}',
-  );
   if (user == null || !user.isReviewer) {
     yield const <TaskModel>[];
     return;
   }
 
   final repo = ref.watch(taskRepositoryProvider);
+  // ✅ QC sees only tasks where he is reviewerId AND status == qc_review
   await for (final tasks in repo.watchTasksByReviewer(user.uid)) {
     final filtered = tasks.where((t) => t.status == 'qc_review').toList()
       ..sort((a, b) => a.endDate.compareTo(b.endDate));
@@ -309,10 +300,8 @@ class UploadTaskAttachmentController {
           projectId: projectId,
           taskId: taskId,
           uploadedBy: user.uid,
-
           uploaderName: user.name,
           uploaderRole: user.role,
-
           file: file,
           bytes: bytes,
           fileName: fileName,
@@ -348,80 +337,79 @@ final taskByIdProvider = StreamProvider.family<TaskModel?, String>((
   taskId,
 ) {
   final firestore = FirebaseFirestore.instance;
-
   return firestore.collection('tasks').doc(taskId).snapshots().map((doc) {
     if (!doc.exists) return null;
-
     return TaskModel.fromFirestore(doc);
   });
 });
 
-// ================= UNIFIED PROVIDER (NEW - PRODUCTION READY) =================
+// ═══════════════════════════════════════════════════════════════════════════════
+// allVisibleTasksProvider — FIXED VERSION
+//
+// Routing logic (priority order):
+//   1. CLIENT          → tasks where clientId == linkedClientId
+//   2. DC              → tasks where status == client_review (officeId scoped)
+//                        ⚠️ DC must come BEFORE canSeeAllProjects because
+//                           canSeeAllProjects currently includes DC
+//   3. ADMIN / MGMT / REVIEWER (canSeeAllTasks) → all tasks in office
+//   4. TEAM LEADER     → tasks where teamLeaderId == uid
+//   5. ENGINEER        → tasks where assignedEngineerIds arrayContains uid
+// ═══════════════════════════════════════════════════════════════════════════════
 
 final allVisibleTasksProvider = StreamProvider<List<TaskModel>>((ref) {
   final user = ref.watch(currentUserProvider).value;
-
   if (user == null) return const Stream.empty();
 
   final firestore = FirebaseFirestore.instance;
 
-  // 🔥 CLIENT
-  if (user.role == 'client') {
+  // ── 1. CLIENT ────────────────────────────────────────────────────────────
+  if (user.isClient) {
     return firestore
         .collection('tasks')
         .where('clientId', isEqualTo: user.linkedClientId)
         .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => TaskModel.fromFirestore(doc)).toList(),
-        );
+        .map((s) => s.docs.map((d) => TaskModel.fromFirestore(d)).toList());
   }
 
-  // 🔥 ADMIN + QC (reviewer) + MANAGEMENT + DC + Section Head / COO / Principal
-  // — يشوفوا كل tasks المكتب بغض النظر عن التعيين
-  if (user.canSeeAllProjects) {
-    return firestore
-        .collection('tasks')
-        .where('officeId', isEqualTo: user.officeId)
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => TaskModel.fromFirestore(doc)).toList(),
-        );
-  }
-
-  // 🔥 TEAM LEADER — tasks المشاريع المعيّن عليها فقط
-  if (user.canManageTasks) {
-    return firestore
-        .collection('tasks')
-        .where('teamLeaderId', isEqualTo: user.uid)
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => TaskModel.fromFirestore(doc)).toList(),
-        );
-  }
-
-  // 🔥 DC — يشوف tasks في مرحلة client_review (للتوثيق والإرسال)
+  // ── 2. DC ────────────────────────────────────────────────────────────────
+  // ✅ FIX: DC must be checked BEFORE canSeeAllProjects to get correct data.
+  // DC only sees tasks in client_review stage (for documentation & dispatch).
   if (user.isDC) {
     return firestore
         .collection('tasks')
         .where('officeId', isEqualTo: user.officeId)
         .where('status', isEqualTo: 'client_review')
         .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => TaskModel.fromFirestore(doc)).toList(),
-        );
+        .map((s) => s.docs.map((d) => TaskModel.fromFirestore(d)).toList());
   }
 
-  // 🔥 ENGINEER
+  // ── 3. ADMIN + REVIEWER + MANAGEMENT + Section Heads (see all tasks) ──────
+  // canSeeAllProjects covers: Admin, Reviewer, Management, DC, head_of_dept...
+  // DC is handled above, so this catches Admin + Reviewer + Management + SH
+  if (user.canSeeAllProjects) {
+    return firestore
+        .collection('tasks')
+        .where('officeId', isEqualTo: user.officeId)
+        .snapshots()
+        .map((s) => s.docs.map((d) => TaskModel.fromFirestore(d)).toList());
+  }
+
+  // ── 4. TEAM LEADER ───────────────────────────────────────────────────────
+  // ✅ FIX: use isTeamLeader (not canManageTasks which includes Admin).
+  // Team Leader sees only tasks in projects where he is the teamLeader.
+  if (user.isTeamLeader) {
+    return firestore
+        .collection('tasks')
+        .where('teamLeaderId', isEqualTo: user.uid)
+        .snapshots()
+        .map((s) => s.docs.map((d) => TaskModel.fromFirestore(d)).toList());
+  }
+
+  // ── 5. ENGINEER ──────────────────────────────────────────────────────────
+  // Engineer sees only tasks directly assigned to him.
   return firestore
       .collection('tasks')
       .where('assignedEngineerIds', arrayContains: user.uid)
       .snapshots()
-      .map(
-        (snapshot) =>
-            snapshot.docs.map((doc) => TaskModel.fromFirestore(doc)).toList(),
-      );
+      .map((s) => s.docs.map((d) => TaskModel.fromFirestore(d)).toList());
 });

@@ -8,12 +8,15 @@ class TaskActivityRepository {
     return _firestore
         .collection('task_activities')
         .where('taskId', isEqualTo: taskId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => TaskActivity.fromMap(doc.id, doc.data()))
-              .toList(),
+          (snapshot) {
+            final list = snapshot.docs
+                .map((doc) => TaskActivity.fromMap(doc.id, doc.data()))
+                .toList();
+            list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+            return list;
+          },
         );
   }
 

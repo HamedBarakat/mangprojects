@@ -1,14 +1,20 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../features/home/presentation/controllers/home_providers.dart';
 import '../../../../features/home/data/models/user_model.dart';
 import '../../../../features/office/presentation/controllers/office_providers.dart';
+import '../../../../features/projects/presentation/controllers/project_providers.dart';
+import '../../../../features/projects/presentation/controllers/task_providers.dart';
+import '../../../../features/employees/presentation/controllers/employee_providers.dart';
+import '../../../../features/notifications/presentation/controllers/notification_providers.dart';
 import '../../../../features/office/presentation/controllers/office_settings_providers.dart';
 import '../../../../features/office/data/models/office_model.dart';
 import '../../../../features/office/data/models/office_settings_model.dart';
 import '../../../office/presentation/screens/office_lists_screen.dart';
+import '../../../../core/theme/app_theme.dart';
 
 // ── Office stream provider ────────────────────────────────────────────────────
 final officeStreamProvider = StreamProvider<OfficeModel?>((ref) {
@@ -28,67 +34,67 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
     final userAsync = ref.watch(currentUserProvider);
     final user = userAsync.value;
     final officeAsync = ref.watch(officeStreamProvider);
     final isAdmin = user?.isAdmin ?? false;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: AppColors.slate900,
       appBar: AppBar(
-        backgroundColor: cs.surface,
-        elevation: 0,
+        backgroundColor: AppColors.slate850,
         automaticallyImplyLeading: false,
-        title: const Text(
-          'Settings',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: const Text('Settings'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: AppColors.slate700),
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 80),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Profile Card ──────────────────────────────────────────────────
+            // ── Profile Card ────────────────────────────────────────────────
             _ProfileCard(user: user),
+            const SizedBox(height: 28),
 
-            const SizedBox(height: 24),
-
-            // ── Office Settings (Admin only) ──────────────────────────────────
+            // ── Office Settings (Admin only) ────────────────────────────────
             if (isAdmin) ...[
-              _SectionTitle('Office Settings'),
+              _SectionHeader(title: 'Office Settings'),
               const SizedBox(height: 12),
 
-              // Work Hours
               officeAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (_, _) => const Text('Error loading office settings'),
+                loading: () => const Center(
+                  child: CircularProgressIndicator(color: AppColors.cyan500),
+                ),
+                error: (_, _) => const Text(
+                  'Error loading office settings',
+                  style: TextStyle(color: AppColors.error),
+                ),
                 data: (office) => _WorkHoursCard(
                   office: office,
                   officeId: user?.officeId ?? '',
                   ref: ref,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
-              // Manage Lists (projectTypes, disciplines, departments, taskCategories)
               _SettingsTile(
                 icon: Icons.list_alt_rounded,
                 label: 'Manage Lists',
-                iconColor: Colors.blue,
+                iconColor: AppColors.info,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const OfficeListsScreen()),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
-              // ── Job Titles Management ──────────────────────────────────────
               _SettingsTile(
                 icon: Icons.work_outline_rounded,
                 label: 'Manage Job Titles',
-                iconColor: Colors.teal,
+                iconColor: AppColors.cyan500,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -96,50 +102,67 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
             ],
 
-            // ── App Settings ──────────────────────────────────────────────────
-            _SectionTitle('App'),
+            // ── App ─────────────────────────────────────────────────────────
+            _SectionHeader(title: 'App'),
             const SizedBox(height: 12),
             _SettingsTile(
               icon: Icons.info_outline_rounded,
               label: 'App Version',
-              trailing: Text(
-                '1.0.0',
-                style: TextStyle(
-                  color: cs.onSurface.withOpacity(0.5),
-                  fontSize: 13,
+              iconColor: AppColors.slate400,
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.slate700,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  '1.0.0',
+                  style: TextStyle(color: AppColors.slate300, fontSize: 12),
                 ),
               ),
             ),
+            const SizedBox(height: 28),
 
-            const SizedBox(height: 24),
-
-            // ── Account ───────────────────────────────────────────────────────
-            _SectionTitle('Account'),
+            // ── Account ──────────────────────────────────────────────────────
+            _SectionHeader(title: 'Account'),
             const SizedBox(height: 12),
             _SettingsTile(
               icon: Icons.lock_outline_rounded,
               label: 'Change Password',
-              iconColor: Colors.orange,
+              iconColor: AppColors.warning,
               onTap: () => showDialog(
                 context: context,
                 builder: (_) => const _ChangePasswordDialog(),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             _SettingsTile(
               icon: Icons.logout_rounded,
               label: 'Logout',
-              iconColor: Colors.red,
-              labelColor: Colors.red,
+              iconColor: AppColors.error,
+              labelColor: AppColors.error,
               onTap: () async {
                 final confirm = await _confirmLogout(context);
                 if (confirm == true) {
-                  await FirebaseAuth.instance.signOut();
+                  // Invalidate ALL providers so all Firestore streams stop cleanly
+                  ref.invalidate(currentUserProvider);
+                  ref.invalidate(projectsProvider);
+                  ref.invalidate(singleProjectProvider);
+                  ref.invalidate(allVisibleTasksProvider);
+                  ref.invalidate(projectTasksProvider);
+                  ref.invalidate(projectTaskStatsProvider);
+                  ref.invalidate(teamLeaderReviewTasksProvider);
+                  ref.invalidate(qcReviewTasksProvider);
+                  ref.invalidate(unreadNotificationsCountProvider);
+                  ref.invalidate(employeesProvider);
+                  // Clear local storage and office
                   await ref.read(localStorageProvider).clearAll();
+                  await ref.read(selectedOfficeProvider.notifier).clearOffice();
+                  // Sign out — authStateChanges fires → AuthWrapper shows LoginScreen
+                  await FirebaseAuth.instance.signOut();
                 }
               },
             ),
@@ -153,7 +176,13 @@ class SettingsScreen extends ConsumerWidget {
     return showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Logout'),
+        title: const Row(
+          children: [
+            Icon(Icons.logout_rounded, color: AppColors.error, size: 20),
+            SizedBox(width: 8),
+            Text('Logout'),
+          ],
+        ),
         content: const Text('Are you sure you want to logout?'),
         actions: [
           TextButton(
@@ -161,7 +190,7 @@ class SettingsScreen extends ConsumerWidget {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Logout'),
           ),
@@ -172,7 +201,7 @@ class SettingsScreen extends ConsumerWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Job Titles Management Screen — Firestore connected
+// Job Titles Management Screen
 // ══════════════════════════════════════════════════════════════════════════════
 
 class JobTitlesManagementScreen extends ConsumerStatefulWidget {
@@ -186,7 +215,7 @@ class JobTitlesManagementScreen extends ConsumerStatefulWidget {
 class _JobTitlesManagementScreenState
     extends ConsumerState<JobTitlesManagementScreen> {
   List<_JobTitleGroupState> _groups = [];
-  bool _initialized = false; // تحميل مرة واحدة بس بعد ما الـ data تجي
+  bool _initialized = false;
   bool _saving = false;
 
   void _initGroups(List<JobTitleGroup> source) {
@@ -201,7 +230,6 @@ class _JobTitlesManagementScreenState
     _initialized = true;
   }
 
-  // ── Edit label ──────────────────────────────────────────────────────────────
   Future<void> _editEntry(int groupIdx, int entryIdx) async {
     final entry = _groups[groupIdx].entries[entryIdx];
     final ctrl = TextEditingController(text: entry.label);
@@ -215,28 +243,18 @@ class _JobTitlesManagementScreenState
           children: [
             Text(
               _groups[groupIdx].title,
-              style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 11, color: AppColors.cyan500, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: ctrl,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Title Label',
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: 'Title Label'),
             ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(context, ctrl.text.trim()),
             child: const Text('Save'),
@@ -246,15 +264,11 @@ class _JobTitlesManagementScreenState
     );
     if (result != null && result.isNotEmpty) {
       setState(() {
-        _groups[groupIdx].entries[entryIdx] = _JobTitleEntry(
-          key: entry.key,
-          label: result,
-        );
+        _groups[groupIdx].entries[entryIdx] = _JobTitleEntry(key: entry.key, label: result);
       });
     }
   }
 
-  // ── Add entry to group ──────────────────────────────────────────────────────
   Future<void> _addEntry(int groupIdx) async {
     final keyCtrl = TextEditingController();
     final labelCtrl = TextEditingController();
@@ -268,10 +282,7 @@ class _JobTitlesManagementScreenState
             TextField(
               controller: labelCtrl,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Title Label (e.g. Senior Architect)',
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: 'Title Label (e.g. Senior Architect)'),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -279,38 +290,26 @@ class _JobTitlesManagementScreenState
               decoration: const InputDecoration(
                 labelText: 'Key (e.g. senior_architect)',
                 helperText: 'Lowercase letters and underscores only',
-                border: OutlineInputBorder(),
               ),
             ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add')),
         ],
       ),
     );
-    if (result == true &&
-        labelCtrl.text.trim().isNotEmpty &&
-        keyCtrl.text.trim().isNotEmpty) {
+    if (result == true && labelCtrl.text.trim().isNotEmpty && keyCtrl.text.trim().isNotEmpty) {
       setState(() {
-        _groups[groupIdx].entries.add(
-          _JobTitleEntry(
-            key: keyCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
-            label: labelCtrl.text.trim(),
-          ),
-        );
+        _groups[groupIdx].entries.add(_JobTitleEntry(
+          key: keyCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
+          label: labelCtrl.text.trim(),
+        ));
       });
     }
   }
 
-  // ── Add new group ───────────────────────────────────────────────────────────
   Future<void> _addGroup() async {
     final ctrl = TextEditingController();
     final result = await showDialog<String>(
@@ -320,31 +319,19 @@ class _JobTitlesManagementScreenState
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Group Name (e.g. Surveying)',
-            border: OutlineInputBorder(),
-          ),
+          decoration: const InputDecoration(labelText: 'Group Name (e.g. Surveying)'),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-            child: const Text('Add'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()), child: const Text('Add')),
         ],
       ),
     );
     if (result != null && result.isNotEmpty) {
-      setState(() {
-        _groups.add(_JobTitleGroupState(title: result, entries: []));
-      });
+      setState(() => _groups.add(_JobTitleGroupState(title: result, entries: [])));
     }
   }
 
-  // ── Delete entry ────────────────────────────────────────────────────────────
   Future<void> _deleteEntry(int groupIdx, int entryIdx) async {
     final label = _groups[groupIdx].entries[entryIdx].label;
     final confirm = await showDialog<bool>(
@@ -353,28 +340,21 @@ class _JobTitlesManagementScreenState
         title: const Text('Delete Job Title'),
         content: Text('Delete "$label"?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Delete'),
           ),
         ],
       ),
     );
-    if (confirm == true) {
-      setState(() => _groups[groupIdx].entries.removeAt(entryIdx));
-    }
+    if (confirm == true) setState(() => _groups[groupIdx].entries.removeAt(entryIdx));
   }
 
-  // ── Save to Firestore ───────────────────────────────────────────────────────
   Future<void> _save() async {
     final user = ref.read(currentUserProvider).value;
     if (user == null) return;
-
     setState(() => _saving = true);
     try {
       final groupData = _groups.map((g) {
@@ -383,25 +363,19 @@ class _JobTitlesManagementScreenState
           titles: {for (final e in g.entries) e.key: e.label},
         );
       }).toList();
-
-      await ref
-          .read(officeSettingsRepositoryProvider)
-          .saveJobTitleGroups(officeId: user.officeId, groups: groupData);
-
+      await ref.read(officeSettingsRepositoryProvider).saveJobTitleGroups(
+        officeId: user.officeId,
+        groups: groupData,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Job titles saved ✓'),
-            behavior: SnackBarBehavior.floating,
-          ),
+          const SnackBar(content: Text('Job titles saved ✓'), behavior: SnackBarBehavior.floating),
         );
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -410,55 +384,44 @@ class _JobTitlesManagementScreenState
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    // ✅ watch الـ provider — لما الـ data تجي نحمل الـ groups مرة واحدة
     final settingsAsync = ref.watch(officeSettingsProvider);
     settingsAsync.whenData((settings) {
       if (!_initialized) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !_initialized) {
-            setState(() => _initGroups(settings.effectiveJobTitleGroups));
-          }
+          if (mounted && !_initialized) setState(() => _initGroups(settings.effectiveJobTitleGroups));
         });
       }
     });
 
-    // Loading state
     if (!_initialized) {
       return Scaffold(
-        backgroundColor: cs.surface,
+        backgroundColor: AppColors.slate900,
         appBar: AppBar(
-          backgroundColor: cs.surface,
-          elevation: 0,
-          title: const Text(
-            'Manage Job Titles',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+          backgroundColor: AppColors.slate850,
+          title: const Text('Manage Job Titles'),
         ),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: CircularProgressIndicator(color: AppColors.cyan500)),
       );
     }
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: AppColors.slate900,
       appBar: AppBar(
-        backgroundColor: cs.surface,
-        elevation: 0,
-        title: const Text(
-          'Manage Job Titles',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        backgroundColor: AppColors.slate850,
+        title: const Text('Manage Job Titles'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: AppColors.slate700),
         ),
         actions: [
           TextButton.icon(
             icon: _saving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.save_rounded),
-            label: Text(_saving ? 'Saving...' : 'Save'),
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.cyan400))
+                : const Icon(Icons.save_rounded, color: AppColors.cyan400, size: 18),
+            label: Text(
+              _saving ? 'Saving...' : 'Save',
+              style: const TextStyle(color: AppColors.cyan400, fontWeight: FontWeight.bold),
+            ),
             onPressed: _saving ? null : _save,
           ),
         ],
@@ -468,31 +431,27 @@ class _JobTitlesManagementScreenState
         children: [
           // Info banner
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             margin: const EdgeInsets.only(bottom: 20),
             decoration: BoxDecoration(
-              color: cs.primaryContainer.withOpacity(0.3),
+              color: AppColors.cyan900.withOpacity(0.25),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: cs.primary.withOpacity(0.2)),
+              border: Border.all(color: AppColors.cyan800.withOpacity(0.4)),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                Icon(Icons.info_outline_rounded, color: cs.primary, size: 18),
-                const SizedBox(width: 10),
+                Icon(Icons.info_outline_rounded, color: AppColors.cyan400, size: 18),
+                SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Customize job titles for your office. Press Save to apply changes.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: cs.onSurface.withOpacity(0.7),
-                    ),
+                    style: TextStyle(fontSize: 12, color: AppColors.slate300),
                   ),
                 ),
               ],
             ),
           ),
 
-          // Groups
           for (int gi = 0; gi < _groups.length; gi++) ...[
             _GroupHeader(title: _groups[gi].title, onAdd: () => _addEntry(gi)),
             const SizedBox(height: 8),
@@ -505,16 +464,13 @@ class _JobTitlesManagementScreenState
             const SizedBox(height: 20),
           ],
 
-          // Add new group button
           OutlinedButton.icon(
             icon: const Icon(Icons.add_rounded),
             label: const Text('Add New Group'),
             onPressed: _addGroup,
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 32),
@@ -524,7 +480,6 @@ class _JobTitlesManagementScreenState
   }
 }
 
-// ── Local state classes ───────────────────────────────────────────────────────
 class _JobTitleGroupState {
   String title;
   List<_JobTitleEntry> entries;
@@ -537,7 +492,6 @@ class _JobTitleEntry {
   const _JobTitleEntry({required this.key, required this.label});
 }
 
-// ── Group Header ──────────────────────────────────────────────────────────────
 class _GroupHeader extends StatelessWidget {
   final String title;
   final VoidCallback onAdd;
@@ -545,30 +499,22 @@ class _GroupHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
-          width: 4,
-          height: 18,
-          decoration: BoxDecoration(
-            color: cs.primary,
-            borderRadius: BorderRadius.circular(2),
-          ),
+          width: 3,
+          height: 16,
+          decoration: BoxDecoration(color: AppColors.cyan500, borderRadius: BorderRadius.circular(2)),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             title,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: cs.primary,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.cyan400),
           ),
         ),
         IconButton(
-          icon: Icon(Icons.add_circle_outline_rounded, color: cs.primary),
+          icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.cyan500, size: 20),
           onPressed: onAdd,
           tooltip: 'Add to $title',
           padding: EdgeInsets.zero,
@@ -579,60 +525,36 @@ class _GroupHeader extends StatelessWidget {
   }
 }
 
-// ── Job Title Tile ────────────────────────────────────────────────────────────
 class _JobTitleTile extends StatelessWidget {
   final _JobTitleEntry entry;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-  const _JobTitleTile({
-    required this.entry,
-    required this.onEdit,
-    required this.onDelete,
-  });
+  const _JobTitleTile({required this.entry, required this.onEdit, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withOpacity(0.5),
+        color: AppColors.slate800,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.4)),
+        border: Border.all(color: AppColors.slate700),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-        leading: Icon(
-          Icons.work_outline_rounded,
-          color: cs.primary.withOpacity(0.6),
-          size: 20,
-        ),
-        title: Text(
-          entry.label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        subtitle: Text(
-          entry.key,
-          style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.4)),
-        ),
+        leading: const Icon(Icons.work_outline_rounded, color: AppColors.slate500, size: 20),
+        title: Text(entry.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.slate200)),
+        subtitle: Text(entry.key, style: const TextStyle(fontSize: 11, color: AppColors.slate500)),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: Icon(
-                Icons.edit_outlined,
-                size: 18,
-                color: cs.primary.withOpacity(0.7),
-              ),
+              icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.cyan600),
               onPressed: onEdit,
               tooltip: 'Edit',
             ),
             IconButton(
-              icon: const Icon(
-                Icons.delete_outline_rounded,
-                size: 18,
-                color: Colors.red,
-              ),
+              icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.error),
               onPressed: onDelete,
               tooltip: 'Delete',
             ),
@@ -651,32 +573,24 @@ class _ProfileCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
-
-    // ✅ custom job titles من الـ office settings
-    final customTitles = ref
-        .watch(officeSettingsProvider)
-        .valueOrNull
-        ?.effectiveJobTitles;
+    final customTitles = ref.watch(officeSettingsProvider).valueOrNull?.effectiveJobTitles;
     final titleLabel = user?.jobTitleLabelFrom(customTitles) ?? '—';
+    final roleColor = AppStatusColors.forRole(user?.role ?? '');
 
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cs.primaryContainer.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.primary.withOpacity(0.2)),
-      ),
+      decoration: AppDecorations.heroBanner(),
       child: Row(
         children: [
           Container(
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: cs.primary.withOpacity(0.15),
-              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
             ),
-            child: Icon(Icons.person_rounded, color: cs.primary, size: 28),
+            child: const Icon(Icons.person_rounded, color: Colors.white, size: 28),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -685,33 +599,24 @@ class _ProfileCard extends ConsumerWidget {
               children: [
                 Text(
                   user?.name ?? '—',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   titleLabel,
-                  style: TextStyle(
-                    color: cs.onSurface.withOpacity(0.6),
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(
-                    color: _roleColor(user?.role, cs).withOpacity(0.15),
+                    color: Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     user?.roleLabel ?? '—',
                     style: TextStyle(
-                      color: _roleColor(user?.role, cs),
+                      color: roleColor == AppColors.cyan500 ? AppColors.cyan200 : Colors.white,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -724,27 +629,6 @@ class _ProfileCard extends ConsumerWidget {
       ),
     );
   }
-
-  Color _roleColor(String? role, ColorScheme cs) {
-    switch (role) {
-      case 'admin':
-        return Colors.deepPurple;
-      case 'engineer':
-        return cs.primary;
-      case 'team_leader':
-        return Colors.teal;
-      case 'reviewer':
-        return Colors.indigo;
-      case 'management':
-        return Colors.brown;
-      case 'administration':
-        return Colors.blueGrey;
-      case 'client':
-        return Colors.orange;
-      default:
-        return Colors.grey;
-    }
-  }
 }
 
 // ── Work Hours Card ───────────────────────────────────────────────────────────
@@ -754,11 +638,7 @@ class _WorkHoursCard extends ConsumerStatefulWidget {
   final String officeId;
   final WidgetRef ref;
 
-  const _WorkHoursCard({
-    required this.office,
-    required this.officeId,
-    required this.ref,
-  });
+  const _WorkHoursCard({required this.office, required this.officeId, required this.ref});
 
   @override
   ConsumerState<_WorkHoursCard> createState() => _WorkHoursCardState();
@@ -787,26 +667,11 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final workHours =
-        _endTime.hour -
-        _startTime.hour +
-        (_endTime.minute - _startTime.minute) / 60;
+    final workHours = _endTime.hour - _startTime.hour + (_endTime.minute - _startTime.minute) / 60;
 
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: AppDecorations.card(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -815,35 +680,25 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: cs.primary.withOpacity(0.1),
+                  color: AppColors.cyan500.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(
-                  Icons.schedule_rounded,
-                  color: cs.primary,
-                  size: 20,
-                ),
+                child: const Icon(Icons.schedule_rounded, color: AppColors.cyan500, size: 20),
               ),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Work Hours',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                  ),
+                  const Text('Work Hours', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.slate100)),
                   Text(
                     '${workHours.toStringAsFixed(1)} hrs/day',
-                    style: TextStyle(
-                      color: cs.onSurface.withOpacity(0.5),
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: AppColors.slate400, fontSize: 12),
                   ),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -851,7 +706,7 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
                   label: 'Start Time',
                   icon: Icons.login_rounded,
                   time: _startTime,
-                  color: Colors.green,
+                  color: AppColors.success,
                   onTap: () => _pickTime(isStart: true),
                 ),
               ),
@@ -861,7 +716,7 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
                   label: 'End Time',
                   icon: Icons.logout_rounded,
                   time: _endTime,
-                  color: cs.primary,
+                  color: AppColors.cyan500,
                   onTap: () => _pickTime(isStart: false),
                 ),
               ),
@@ -873,14 +728,7 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
             child: FilledButton.icon(
               onPressed: _saving ? null : _save,
               icon: _saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.save_rounded, size: 18),
               label: Text(_saving ? 'Saving...' : 'Save Work Hours'),
             ),
@@ -902,11 +750,8 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
     );
     if (picked != null) {
       setState(() {
-        if (isStart) {
-          _startTime = picked;
-        } else {
-          _endTime = picked;
-        }
+        if (isStart) _startTime = picked;
+        else _endTime = picked;
       });
     }
   }
@@ -914,34 +759,26 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
   Future<void> _save() async {
     final startMinutes = _startTime.hour * 60 + _startTime.minute;
     final endMinutes = _endTime.hour * 60 + _endTime.minute;
-
     if (endMinutes <= startMinutes) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('End time must be after start time')),
       );
       return;
     }
-
     setState(() => _saving = true);
     try {
-      await ref
-          .read(officeRepositoryProvider)
-          .updateWorkHours(
-            officeId: widget.officeId,
-            workStartTime: _formatTime(_startTime),
-            workEndTime: _formatTime(_endTime),
-          );
+      await ref.read(officeRepositoryProvider).updateWorkHours(
+        officeId: widget.officeId,
+        workStartTime: _formatTime(_startTime),
+        workEndTime: _formatTime(_endTime),
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Work hours updated successfully ✓')),
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -949,10 +786,7 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
 
   TimeOfDay _parseTime(String time) {
     final parts = time.split(':');
-    return TimeOfDay(
-      hour: int.tryParse(parts[0]) ?? 9,
-      minute: int.tryParse(parts[1]) ?? 0,
-    );
+    return TimeOfDay(hour: int.tryParse(parts[0]) ?? 9, minute: int.tryParse(parts[1]) ?? 0);
   }
 
   String _formatTime(TimeOfDay t) =>
@@ -978,8 +812,6 @@ class _TimePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -994,33 +826,17 @@ class _TimePicker extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, color: color, size: 14),
+                Icon(icon, color: color, size: 13),
                 const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: cs.onSurface.withOpacity(0.6),
-                    fontSize: 11,
-                  ),
-                ),
+                Text(label, style: TextStyle(color: color.withOpacity(0.8), fontSize: 11)),
               ],
             ),
             const SizedBox(height: 6),
             Text(
               '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
-              style: TextStyle(
-                color: color,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.bold),
             ),
-            Text(
-              'Tap to change',
-              style: TextStyle(
-                color: cs.onSurface.withOpacity(0.4),
-                fontSize: 10,
-              ),
-            ),
+            Text('Tap to change', style: TextStyle(color: color.withOpacity(0.5), fontSize: 10)),
           ],
         ),
       ),
@@ -1028,19 +844,89 @@ class _TimePicker extends StatelessWidget {
   }
 }
 
-// ── Reusable Widgets ──────────────────────────────────────────────────────────
+// ── Section Header ────────────────────────────────────────────────────────────
 
-class _SectionTitle extends StatelessWidget {
+class _SectionHeader extends StatelessWidget {
   final String title;
-  const _SectionTitle(this.title);
+  const _SectionHeader({required this.title});
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: Theme.of(
-        context,
-      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 16,
+          decoration: BoxDecoration(color: AppColors.cyan500, borderRadius: BorderRadius.circular(2)),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(color: AppColors.slate100, fontWeight: FontWeight.bold, fontSize: 15),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Settings Tile ─────────────────────────────────────────────────────────────
+
+class _SettingsTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final Color? iconColor;
+  final Color? labelColor;
+
+  const _SettingsTile({
+    required this.icon,
+    required this.label,
+    this.trailing,
+    this.onTap,
+    this.iconColor,
+    this.labelColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.slate800,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.slate700),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: (iconColor ?? AppColors.slate400).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(icon, color: iconColor ?? AppColors.slate400, size: 18),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: labelColor ?? AppColors.slate200,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            if (trailing != null) trailing!,
+            if (onTap != null && trailing == null)
+              const Icon(Icons.chevron_right_rounded, color: AppColors.slate600, size: 20),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1051,8 +937,7 @@ class _ChangePasswordDialog extends ConsumerStatefulWidget {
   const _ChangePasswordDialog();
 
   @override
-  ConsumerState<_ChangePasswordDialog> createState() =>
-      _ChangePasswordDialogState();
+  ConsumerState<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
 }
 
 class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
@@ -1077,10 +962,7 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
 
   Future<void> _changePassword() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    setState(() { _isLoading = true; _errorMessage = null; });
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Not logged in');
@@ -1093,10 +975,7 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password changed successfully ✓'),
-            backgroundColor: Colors.green,
-          ),
+          const SnackBar(content: Text('Password changed successfully ✓'), backgroundColor: AppColors.success),
         );
       }
     } on FirebaseAuthException catch (e) {
@@ -1117,11 +996,10 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return AlertDialog(
       title: const Row(
         children: [
-          Icon(Icons.lock_outline_rounded, color: Colors.orange, size: 20),
+          Icon(Icons.lock_outline_rounded, color: AppColors.warning, size: 20),
           SizedBox(width: 8),
           Text('Change Password'),
         ],
@@ -1140,15 +1018,9 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
                   labelText: 'Current Password',
                   prefixIcon: const Icon(Icons.lock_outline_rounded),
                   suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureCurrent
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                    ),
-                    onPressed: () =>
-                        setState(() => _obscureCurrent = !_obscureCurrent),
+                    icon: Icon(_obscureCurrent ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                    onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
                   ),
-                  border: const OutlineInputBorder(),
                 ),
                 validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
               ),
@@ -1160,20 +1032,14 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
                   labelText: 'New Password',
                   prefixIcon: const Icon(Icons.lock_rounded),
                   suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureNew
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                    ),
+                    icon: Icon(_obscureNew ? Icons.visibility_outlined : Icons.visibility_off_outlined),
                     onPressed: () => setState(() => _obscureNew = !_obscureNew),
                   ),
-                  border: const OutlineInputBorder(),
                 ),
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Required';
                   if (v.length < 6) return 'Minimum 6 characters';
-                  if (v == _currentCtrl.text)
-                    return 'Must be different from current';
+                  if (v == _currentCtrl.text) return 'Must be different from current';
                   return null;
                 },
               ),
@@ -1185,15 +1051,9 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
                   labelText: 'Confirm New Password',
                   prefixIcon: const Icon(Icons.lock_reset_rounded),
                   suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureConfirm
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                    ),
-                    onPressed: () =>
-                        setState(() => _obscureConfirm = !_obscureConfirm),
+                    icon: Icon(_obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                    onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                   ),
-                  border: const OutlineInputBorder(),
                 ),
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Required';
@@ -1204,31 +1064,17 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
               if (_errorMessage != null) ...[
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: cs.errorContainer,
+                    color: AppColors.error.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.error.withOpacity(0.3)),
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.error_outline_rounded,
-                        color: cs.error,
-                        size: 16,
-                      ),
+                      const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 16),
                       const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _errorMessage!,
-                          style: TextStyle(
-                            color: cs.onErrorContainer,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
+                      Expanded(child: Text(_errorMessage!, style: const TextStyle(color: AppColors.error, fontSize: 12))),
                     ],
                   ),
                 ),
@@ -1244,82 +1090,12 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
         ),
         FilledButton(
           onPressed: _isLoading ? null : _changePassword,
-          style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
           child: _isLoading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : const Text('Change'),
         ),
       ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SettingsTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Widget? trailing;
-  final VoidCallback? onTap;
-  final Color? iconColor;
-  final Color? labelColor;
-
-  const _SettingsTile({
-    required this.icon,
-    required this.label,
-    this.trailing,
-    this.onTap,
-    this.iconColor,
-    this.labelColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: iconColor ?? cs.onSurface.withOpacity(0.7),
-              size: 22,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: labelColor ?? cs.onSurface,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            ?trailing,
-            if (onTap != null && trailing == null)
-              Icon(
-                Icons.chevron_right_rounded,
-                color: cs.onSurface.withOpacity(0.3),
-              ),
-          ],
-        ),
-      ),
     );
   }
 }

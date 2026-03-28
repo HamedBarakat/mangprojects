@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -40,11 +39,11 @@ class TaskCollaborationRepository {
   }) {
     _log('watchTaskComments START taskId=$taskId');
 
-    return _commentsRef(taskId).orderBy('createdAt').snapshots().map((
-      snapshot,
-    ) {
+    return _commentsRef(taskId).snapshots().map((snapshot) {
       _log('watchTaskComments DATA docs=${snapshot.docs.length}');
-      return snapshot.docs.map(TaskComment.fromFirestore).toList();
+      final list = snapshot.docs.map(TaskComment.fromFirestore).toList();
+      list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      return list;
     });
   }
 
@@ -55,11 +54,11 @@ class TaskCollaborationRepository {
   }) {
     _log('watchTaskAttachments START taskId=$taskId');
 
-    return _attachmentsRef(
-      taskId,
-    ).orderBy('createdAt', descending: true).snapshots().map((snapshot) {
+    return _attachmentsRef(taskId).snapshots().map((snapshot) {
       _log('watchTaskAttachments DATA docs=${snapshot.docs.length}');
-      return snapshot.docs.map(TaskAttachment.fromFirestore).toList();
+      final list = snapshot.docs.map(TaskAttachment.fromFirestore).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
     });
   }
 

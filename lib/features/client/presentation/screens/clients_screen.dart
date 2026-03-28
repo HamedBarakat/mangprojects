@@ -6,10 +6,7 @@ import '../../../../features/client/data/providers/client_providers.dart';
 import '../../../../features/employees/data/models/employee_model.dart';
 import '../../../../features/employees/presentation/controllers/employee_providers.dart';
 import '../../../../features/employees/presentation/screens/add_edit_employee_screen.dart';
-
-// ══════════════════════════════════════════════════════════════════════════════
-// CLIENTS SCREEN  (Admin — manage clients + client accounts)
-// ══════════════════════════════════════════════════════════════════════════════
+import '../../../../core/theme/app_theme.dart';
 
 class ClientsScreen extends ConsumerStatefulWidget {
   const ClientsScreen({super.key});
@@ -38,20 +35,34 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final clientsAsync = ref.watch(clientsStreamProvider);
     final employeesAsync = ref.watch(clientAccountsProvider);
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: AppColors.slate900,
       appBar: AppBar(
-        backgroundColor: cs.surface,
-        elevation: 0,
+        backgroundColor: AppColors.slate850,
         automaticallyImplyLeading: false,
-        title: const Text(
-          'Clients',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Clients'),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 12),
+            child: IconButton(
+              icon: const Icon(Icons.add_rounded),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.cyan500.withOpacity(0.12),
+                foregroundColor: AppColors.cyan400,
+              ),
+              onPressed: () {
+                if (_tabController.index == 0) {
+                  _openAddEditClient(context, null);
+                } else {
+                  _openClientPickerThenAddAccount(context);
+                }
+              },
+            ),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -59,24 +70,12 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
             Tab(text: 'Client Accounts'),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_rounded),
-            onPressed: () {
-              if (_tabController.index == 0) {
-                _openAddEditClient(context, null);
-              } else {
-                _openClientPickerThenAddAccount(context);
-              }
-            },
-          ),
-        ],
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildClientRecordsTab(context, cs, clientsAsync),
-          _buildClientAccountsTab(context, cs, employeesAsync, clientsAsync),
+          _buildClientRecordsTab(context, clientsAsync),
+          _buildClientAccountsTab(context, employeesAsync, clientsAsync),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -87,75 +86,59 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
             _openClientPickerThenAddAccount(context);
           }
         },
+        backgroundColor: AppColors.cyan500,
+        foregroundColor: Colors.white,
         icon: const Icon(Icons.add_rounded),
         label: Text(
           _tabController.index == 0 ? 'Add Client' : 'Add Client Account',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
     );
   }
 
-  Widget _buildClientRecordsTab(
-    BuildContext context,
-    ColorScheme cs,
-    AsyncValue<List<ClientModel>> clientsAsync,
-  ) {
+  Widget _buildClientRecordsTab(BuildContext context, AsyncValue<List<ClientModel>> clientsAsync) {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        Container(
+          color: AppColors.slate850,
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           child: TextField(
             onChanged: (v) => setState(() => _recordsSearch = v.toLowerCase()),
             decoration: InputDecoration(
               hintText: 'Search clients...',
-              prefixIcon: const Icon(Icons.search_rounded),
-              filled: true,
-              fillColor: cs.surfaceContainerHighest,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
+              prefixIcon: const Icon(Icons.search_rounded, size: 20),
               contentPadding: const EdgeInsets.symmetric(vertical: 0),
             ),
           ),
         ),
+        Container(height: 1, color: AppColors.slate700),
         Expanded(
           child: clientsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('Error: $e')),
+            loading: () => const Center(child: CircularProgressIndicator(color: AppColors.cyan500)),
+            error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
             data: (clients) {
-              final filtered =
-                  clients
-                      .where(
-                        (c) =>
-                            _recordsSearch.isEmpty ||
-                            c.name.toLowerCase().contains(_recordsSearch) ||
-                            (c.phone?.toLowerCase().contains(_recordsSearch) ??
-                                false) ||
-                            (c.email?.toLowerCase().contains(_recordsSearch) ??
-                                false),
-                      )
-                      .toList()
-                    ..sort((a, b) => a.name.compareTo(b.name));
+              final filtered = clients
+                  .where((c) =>
+                      _recordsSearch.isEmpty ||
+                      c.name.toLowerCase().contains(_recordsSearch) ||
+                      (c.phone?.toLowerCase().contains(_recordsSearch) ?? false) ||
+                      (c.email?.toLowerCase().contains(_recordsSearch) ?? false))
+                  .toList()
+                ..sort((a, b) => a.name.compareTo(b.name));
 
               if (filtered.isEmpty) {
                 return _EmptyState(
                   icon: Icons.business_outlined,
-                  title: _recordsSearch.isNotEmpty
-                      ? 'No Results Found'
-                      : 'No Clients Yet',
-                  subtitle: _recordsSearch.isNotEmpty
-                      ? 'Try a different search term'
-                      : 'Add your first client to get started',
+                  title: _recordsSearch.isNotEmpty ? 'No Results Found' : 'No Clients Yet',
+                  subtitle: _recordsSearch.isNotEmpty ? 'Try a different search term' : 'Add your first client to get started',
                   actionLabel: _recordsSearch.isNotEmpty ? null : 'Add Client',
-                  onAction: _recordsSearch.isNotEmpty
-                      ? null
-                      : () => _openAddEditClient(context, null),
+                  onAction: _recordsSearch.isNotEmpty ? null : () => _openAddEditClient(context, null),
                 );
               }
 
               return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
                 itemCount: filtered.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (_, i) => _ClientCard(
@@ -173,72 +156,56 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
 
   Widget _buildClientAccountsTab(
     BuildContext context,
-    ColorScheme cs,
     AsyncValue<List<EmployeeModel>> employeesAsync,
     AsyncValue<List<ClientModel>> clientsAsync,
   ) {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        Container(
+          color: AppColors.slate850,
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           child: TextField(
             onChanged: (v) => setState(() => _accountsSearch = v.toLowerCase()),
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               hintText: 'Search client accounts...',
-              prefixIcon: const Icon(Icons.search_rounded),
-              filled: true,
-              fillColor: cs.surfaceContainerHighest,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              prefixIcon: Icon(Icons.search_rounded, size: 20),
+              contentPadding: EdgeInsets.symmetric(vertical: 0),
             ),
           ),
         ),
+        Container(height: 1, color: AppColors.slate700),
         Expanded(
           child: employeesAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('Error: $e')),
+            loading: () => const Center(child: CircularProgressIndicator(color: AppColors.cyan500)),
+            error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
             data: (employees) {
-              final clientAccounts =
-                  employees
-                      .where((e) => e.role == 'client')
-                      .where(
-                        (e) =>
-                            _accountsSearch.isEmpty ||
-                            e.name.toLowerCase().contains(_accountsSearch) ||
-                            e.email.toLowerCase().contains(_accountsSearch) ||
-                            e.phone.toLowerCase().contains(_accountsSearch) ||
-                            e.employeeCode.toLowerCase().contains(
-                              _accountsSearch,
-                            ),
-                      )
-                      .toList()
-                    ..sort((a, b) => a.name.compareTo(b.name));
+              final clientAccounts = employees
+                  .where((e) => e.role == 'client')
+                  .where((e) =>
+                      _accountsSearch.isEmpty ||
+                      e.name.toLowerCase().contains(_accountsSearch) ||
+                      e.email.toLowerCase().contains(_accountsSearch) ||
+                      e.phone.toLowerCase().contains(_accountsSearch) ||
+                      e.employeeCode.toLowerCase().contains(_accountsSearch))
+                  .toList()
+                ..sort((a, b) => a.name.compareTo(b.name));
 
               final clients = clientsAsync.value ?? [];
 
               if (clientAccounts.isEmpty) {
                 return _EmptyState(
                   icon: Icons.person_outline_rounded,
-                  title: _accountsSearch.isNotEmpty
-                      ? 'No Results Found'
-                      : 'No Client Accounts Yet',
+                  title: _accountsSearch.isNotEmpty ? 'No Results Found' : 'No Client Accounts Yet',
                   subtitle: _accountsSearch.isNotEmpty
                       ? 'Try a different search term'
                       : 'Add a client login account and link it to a client record',
-                  actionLabel: _accountsSearch.isNotEmpty
-                      ? null
-                      : 'Add Client Account',
-                  onAction: _accountsSearch.isNotEmpty
-                      ? null
-                      : () => _openAddClientAccount(context, null),
+                  actionLabel: _accountsSearch.isNotEmpty ? null : 'Add Client Account',
+                  onAction: _accountsSearch.isNotEmpty ? null : () => _openAddClientAccount(context, null),
                 );
               }
 
               return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
                 itemCount: clientAccounts.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (_, i) {
@@ -247,7 +214,6 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
                       .where((c) => c.id == account.linkedClientId)
                       .cast<ClientModel?>()
                       .firstOrNull;
-
                   return _ClientAccountCard(
                     account: account,
                     linkedClientName: linkedClient?.name,
@@ -264,18 +230,10 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
   }
 
   void _openAddEditClient(BuildContext context, ClientModel? client) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => AddEditClientScreen(client: client)),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (_) => AddEditClientScreen(client: client)));
   }
 
-  void _openAddClientAccount(
-    BuildContext context,
-    EmployeeModel? employee, {
-    String? linkedClientId,
-    String? linkedClientName,
-  }) {
+  void _openAddClientAccount(BuildContext context, EmployeeModel? employee, {String? linkedClientId, String? linkedClientName}) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -284,9 +242,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
           initialRole: 'client',
           lockRole: employee == null,
           initialLinkedClientId: employee?.linkedClientId ?? linkedClientId,
-          screenTitle: employee == null
-              ? 'Add Client Account'
-              : 'Edit Client Account',
+          screenTitle: employee == null ? 'Add Client Account' : 'Edit Client Account',
         ),
       ),
     );
@@ -294,7 +250,6 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
 
   Future<void> _openClientPickerThenAddAccount(BuildContext context) async {
     final clients = ref.read(clientsStreamProvider).value ?? [];
-
     if (clients.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -306,281 +261,194 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
     final selectedClient = await showModalBottomSheet<ClientModel>(
       context: context,
       showDragHandle: true,
-      builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 4),
-                const Text(
-                  'Select Client',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-                Flexible(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: clients.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) {
-                      final client = clients[i];
-                      return ListTile(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        tileColor: cs.surfaceContainerHighest,
-                        leading: CircleAvatar(
-                          backgroundColor: cs.primary.withOpacity(0.12),
-                          child: Text(
-                            client.name.isNotEmpty
-                                ? client.name[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              color: cs.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        title: Text(client.name),
-                        subtitle:
-                            (client.email != null && client.email!.isNotEmpty)
-                            ? Text(client.email!)
-                            : ((client.phone != null &&
-                                      client.phone!.isNotEmpty)
-                                  ? Text(client.phone!)
-                                  : null),
-                        onTap: () => Navigator.pop(ctx, client),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (selectedClient == null || !mounted) return;
-
-    _openAddClientAccount(
-      context,
-      null,
-      linkedClientId: selectedClient.id,
-      linkedClientName: selectedClient.name,
-    );
-  }
-
-  Future<void> _toggleClientActive(ClientModel client) async {
-    final repo = ref.read(clientRepositoryProvider);
-    await repo.updateClient(client.id, {'isActive': !client.isActive});
-  }
-
-  Future<void> _toggleClientAccountStatus(EmployeeModel employee) async {
-    final repo = ref.read(employeeRepositoryProvider);
-    final newStatus = employee.status == 'active' ? 'suspended' : 'active';
-    await repo.toggleStatus(employee.uid, newStatus);
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// CLIENT CARD
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _ClientCard extends StatelessWidget {
-  final ClientModel client;
-  final VoidCallback onEdit;
-  final VoidCallback onToggleActive;
-
-  const _ClientCard({
-    required this.client,
-    required this.onEdit,
-    required this.onToggleActive,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: client.isActive
-              ? cs.outlineVariant.withOpacity(0.4)
-              : cs.outlineVariant.withOpacity(0.2),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Opacity(
-        opacity: client.isActive ? 1.0 : 0.55,
+      builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: cs.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Center(
-                  child: Text(
-                    client.name.isNotEmpty ? client.name[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: cs.primary,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            client.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
+              const Text('Select Client', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.slate100)),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: clients.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) {
+                    final client = clients[i];
+                    return Container(
+                      decoration: AppDecorations.card(),
+                      child: ListTile(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        leading: Container(
+                          width: 40,
+                          height: 40,
                           decoration: BoxDecoration(
-                            color: client.isActive
-                                ? Colors.green.withOpacity(0.12)
-                                : Colors.grey.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(20),
+                            color: AppColors.cyan500.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Text(
-                            client.isActive ? 'Active' : 'Inactive',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: client.isActive
-                                  ? Colors.green
-                                  : Colors.grey,
+                          child: Center(
+                            child: Text(
+                              client.name.isNotEmpty ? client.name[0].toUpperCase() : '?',
+                              style: const TextStyle(color: AppColors.cyan500, fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                    if (client.phone != null && client.phone!.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.phone_outlined,
-                            size: 12,
-                            color: cs.onSurface.withOpacity(0.45),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            client.phone!,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurface.withOpacity(0.6),
-                            ),
-                          ),
-                        ],
+                        title: Text(client.name, style: const TextStyle(color: AppColors.slate100)),
+                        subtitle: (client.email != null && client.email!.isNotEmpty)
+                            ? Text(client.email!, style: const TextStyle(color: AppColors.slate400))
+                            : ((client.phone != null && client.phone!.isNotEmpty)
+                                ? Text(client.phone!, style: const TextStyle(color: AppColors.slate400))
+                                : null),
+                        onTap: () => Navigator.pop(ctx, client),
                       ),
-                    ],
-                    if (client.contacts.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.people_outline,
-                            size: 12,
-                            color: cs.onSurface.withOpacity(0.45),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${client.contacts.length} contact${client.contacts.length > 1 ? 's' : ''}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurface.withOpacity(0.6),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
+                    );
+                  },
                 ),
-              ),
-              PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.more_vert_rounded,
-                  color: cs.onSurface.withOpacity(0.5),
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                onSelected: (val) {
-                  if (val == 'edit') onEdit();
-                  if (val == 'toggle') onToggleActive();
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined, size: 18),
-                        SizedBox(width: 8),
-                        Text('Edit'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'toggle',
-                    child: Row(
-                      children: [
-                        Icon(
-                          client.isActive
-                              ? Icons.block_outlined
-                              : Icons.check_circle_outline,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(client.isActive ? 'Deactivate' : 'Activate'),
-                      ],
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
         ),
       ),
     );
+
+    if (selectedClient == null || !mounted) return;
+    _openAddClientAccount(context, null, linkedClientId: selectedClient.id, linkedClientName: selectedClient.name);
+  }
+
+  Future<void> _toggleClientActive(ClientModel client) async {
+    await ref.read(clientRepositoryProvider).updateClient(client.id, {'isActive': !client.isActive});
+  }
+
+  Future<void> _toggleClientAccountStatus(EmployeeModel employee) async {
+    final newStatus = employee.status == 'active' ? 'suspended' : 'active';
+    await ref.read(employeeRepositoryProvider).toggleStatus(employee.uid, newStatus);
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// CLIENT ACCOUNT CARD
-// ══════════════════════════════════════════════════════════════════════════════
+// ── Client Card ───────────────────────────────────────────────────────────────
+
+class _ClientCard extends StatelessWidget {
+  final ClientModel client;
+  final VoidCallback onEdit;
+  final VoidCallback onToggleActive;
+
+  const _ClientCard({required this.client, required this.onEdit, required this.onToggleActive});
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = client.isActive;
+
+    return Opacity(
+      opacity: isActive ? 1.0 : 0.55,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.slate800,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: isActive ? AppColors.slate700 : AppColors.slate700.withOpacity(0.4)),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6, offset: const Offset(0, 2))],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.cyan500.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.cyan500.withOpacity(0.2)),
+              ),
+              child: Center(
+                child: Text(
+                  client.name.isNotEmpty ? client.name[0].toUpperCase() : '?',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.cyan400),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(client.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.slate100)),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isActive ? AppColors.success.withOpacity(0.1) : AppColors.slate600.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: isActive ? AppColors.success.withOpacity(0.3) : AppColors.slate600),
+                        ),
+                        child: Text(
+                          isActive ? 'Active' : 'Inactive',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isActive ? AppColors.success : AppColors.slate400,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (client.phone != null && client.phone!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.phone_outlined, size: 12, color: AppColors.slate500),
+                        const SizedBox(width: 4),
+                        Text(client.phone!, style: const TextStyle(fontSize: 12, color: AppColors.slate400)),
+                      ],
+                    ),
+                  ],
+                  if (client.contacts.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.people_outline, size: 12, color: AppColors.slate500),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${client.contacts.length} contact${client.contacts.length > 1 ? 's' : ''}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.slate400),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert_rounded, color: AppColors.slate500),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              color: AppColors.slate700,
+              onSelected: (val) {
+                if (val == 'edit') onEdit();
+                if (val == 'toggle') onToggleActive();
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Edit')])),
+                PopupMenuItem(
+                  value: 'toggle',
+                  child: Row(children: [
+                    Icon(isActive ? Icons.block_outlined : Icons.check_circle_outline, size: 18),
+                    const SizedBox(width: 8),
+                    Text(isActive ? 'Deactivate' : 'Activate'),
+                  ]),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Client Account Card ───────────────────────────────────────────────────────
 
 class _ClientAccountCard extends StatelessWidget {
   final EmployeeModel account;
@@ -597,175 +465,101 @@ class _ClientAccountCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final isActive = account.status == 'active';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isActive
-              ? cs.outlineVariant.withOpacity(0.4)
-              : cs.outlineVariant.withOpacity(0.2),
+    return Opacity(
+      opacity: isActive ? 1.0 : 0.65,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.slate800,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.slate700),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6, offset: const Offset(0, 2))],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Opacity(
-        opacity: isActive ? 1.0 : 0.65,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: cs.secondaryContainer,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Center(
-                  child: Text(
-                    account.name.isNotEmpty
-                        ? account.name[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: cs.onSecondaryContainer,
-                    ),
-                  ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.slate700,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  account.name.isNotEmpty ? account.name[0].toUpperCase() : '?',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.slate300),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            account.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isActive
-                                ? Colors.green.withOpacity(0.12)
-                                : Colors.orange.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            isActive ? 'Active' : account.statusLabel,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: isActive ? Colors.green : Colors.orange,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      account.email,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurface.withOpacity(0.65),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(account.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.slate100)),
                       ),
-                    ),
-                    if (account.phone.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        account.phone,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurface.withOpacity(0.55),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isActive ? AppColors.success.withOpacity(0.1) : AppColors.warning.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: isActive ? AppColors.success.withOpacity(0.3) : AppColors.warning.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          isActive ? 'Active' : account.statusLabel,
+                          style: TextStyle(
+                            fontSize: 10, fontWeight: FontWeight.w600,
+                            color: isActive ? AppColors.success : AppColors.warning,
+                          ),
                         ),
                       ),
                     ],
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _MiniChip(
-                          icon: Icons.badge_outlined,
-                          label: account.employeeCode.isEmpty
-                              ? 'No Code'
-                              : account.employeeCode,
-                        ),
-                        _MiniChip(
-                          icon: Icons.business_outlined,
-                          label:
-                              linkedClientName == null ||
-                                  linkedClientName!.isEmpty
-                              ? 'Unlinked Client'
-                              : linkedClientName!,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.more_vert_rounded,
-                  color: cs.onSurface.withOpacity(0.5),
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                onSelected: (val) {
-                  if (val == 'edit') onEdit();
-                  if (val == 'toggle') onToggleActive();
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined, size: 18),
-                        SizedBox(width: 8),
-                        Text('Edit'),
-                      ],
-                    ),
                   ),
-                  PopupMenuItem(
-                    value: 'toggle',
-                    child: Row(
-                      children: [
-                        Icon(
-                          isActive
-                              ? Icons.block_outlined
-                              : Icons.check_circle_outline,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(isActive ? 'Suspend' : 'Activate'),
-                      ],
-                    ),
+                  const SizedBox(height: 3),
+                  Text(account.email, style: const TextStyle(fontSize: 12, color: AppColors.slate400)),
+                  if (account.phone.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(account.phone, style: const TextStyle(fontSize: 12, color: AppColors.slate500)),
+                  ],
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6, runSpacing: 6,
+                    children: [
+                      _MiniChip(icon: Icons.badge_outlined, label: account.employeeCode.isEmpty ? 'No Code' : account.employeeCode),
+                      _MiniChip(icon: Icons.business_outlined, label: linkedClientName?.isEmpty ?? true ? 'Unlinked Client' : linkedClientName!),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert_rounded, color: AppColors.slate500),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              color: AppColors.slate700,
+              onSelected: (val) {
+                if (val == 'edit') onEdit();
+                if (val == 'toggle') onToggleActive();
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Edit')])),
+                PopupMenuItem(
+                  value: 'toggle',
+                  child: Row(children: [
+                    Icon(isActive ? Icons.block_outlined : Icons.check_circle_outline, size: 18),
+                    const SizedBox(width: 8),
+                    Text(isActive ? 'Suspend' : 'Activate'),
+                  ]),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -775,49 +569,37 @@ class _ClientAccountCard extends StatelessWidget {
 class _MiniChip extends StatelessWidget {
   final IconData icon;
   final String label;
-
   const _MiniChip({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
+        color: AppColors.slate700,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.slate600),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: cs.primary),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: cs.onSurface.withOpacity(0.75),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Icon(icon, size: 12, color: AppColors.cyan500),
+          const SizedBox(width: 5),
+          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.slate300, fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ADD / EDIT CLIENT SCREEN
-// ══════════════════════════════════════════════════════════════════════════════
+// ── Add/Edit Client Screen ────────────────────────────────────────────────────
 
 class AddEditClientScreen extends ConsumerStatefulWidget {
   final ClientModel? client;
   const AddEditClientScreen({super.key, this.client});
 
   @override
-  ConsumerState<AddEditClientScreen> createState() =>
-      _AddEditClientScreenState();
+  ConsumerState<AddEditClientScreen> createState() => _AddEditClientScreenState();
 }
 
 class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
@@ -833,7 +615,6 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
 
   bool _isActive = true;
   final List<Map<String, String>> _contacts = [];
-
   bool get _isEditing => widget.client != null;
 
   @override
@@ -846,19 +627,11 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
     _addressController = TextEditingController(text: c?.address ?? '');
     _notesController = TextEditingController(text: c?.notes ?? '');
     _isActive = c?.isActive ?? true;
-
     if (c != null) {
-      _contacts.addAll(
-        c.contacts.map(
-          (ct) => {
-            'id': ct.id,
-            'name': ct.name,
-            'role': ct.role,
-            'phone': ct.phone ?? '',
-            'email': ct.email ?? '',
-          },
-        ),
-      );
+      _contacts.addAll(c.contacts.map((ct) => {
+        'id': ct.id, 'name': ct.name, 'role': ct.role,
+        'phone': ct.phone ?? '', 'email': ct.email ?? '',
+      }));
     }
   }
 
@@ -874,11 +647,7 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
+    setState(() { _isLoading = true; _errorMessage = null; });
     try {
       final repo = ref.read(clientRepositoryProvider);
       final data = {
@@ -890,18 +659,14 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
         'isActive': _isActive,
         'contacts': _contacts,
       };
-
       if (_isEditing) {
         await repo.updateClient(widget.client!.id, data);
       } else {
         await repo.addClient(data);
       }
-
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      setState(
-        () => _errorMessage = e.toString().replaceAll('Exception: ', ''),
-      );
+      setState(() => _errorMessage = e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -909,145 +674,87 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: AppColors.slate900,
       appBar: AppBar(
-        backgroundColor: cs.surface,
-        elevation: 0,
-        title: Text(
-          _isEditing ? 'Edit Client' : 'New Client',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        backgroundColor: AppColors.slate850,
+        title: Text(_isEditing ? 'Edit Client' : 'New Client'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: AppColors.slate700),
         ),
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           children: [
             if (_errorMessage != null) ...[
               Container(
                 padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: cs.errorContainer,
+                  color: AppColors.error.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.error.withOpacity(0.3)),
                 ),
-                child: Text(
-                  _errorMessage!,
-                  style: TextStyle(color: cs.onErrorContainer),
-                ),
+                child: Text(_errorMessage!, style: const TextStyle(color: AppColors.error)),
               ),
-              const SizedBox(height: 16),
             ],
             _SectionTitle(title: 'Basic Information'),
             const SizedBox(height: 12),
-            _buildField(
-              controller: _nameController,
-              label: 'Client Name',
-              icon: Icons.business_outlined,
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-            ),
+            _buildField(controller: _nameController, label: 'Client Name', icon: Icons.business_outlined,
+                validator: (v) => v == null || v.isEmpty ? 'Required' : null),
             const SizedBox(height: 12),
-            _buildField(
-              controller: _phoneController,
-              label: 'Phone',
-              icon: Icons.phone_outlined,
-              keyboardType: TextInputType.phone,
-            ),
+            _buildField(controller: _phoneController, label: 'Phone', icon: Icons.phone_outlined, keyboardType: TextInputType.phone),
             const SizedBox(height: 12),
-            _buildField(
-              controller: _emailController,
-              label: 'Email',
-              icon: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress,
-            ),
+            _buildField(controller: _emailController, label: 'Email', icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress),
             const SizedBox(height: 12),
-            _buildField(
-              controller: _addressController,
-              label: 'Address',
-              icon: Icons.location_on_outlined,
-            ),
+            _buildField(controller: _addressController, label: 'Address', icon: Icons.location_on_outlined),
             const SizedBox(height: 12),
-            _buildField(
-              controller: _notesController,
-              label: 'Notes',
-              icon: Icons.notes_outlined,
-              maxLines: 3,
-            ),
+            _buildField(controller: _notesController, label: 'Notes', icon: Icons.notes_outlined, maxLines: 3),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(14),
-              ),
+              decoration: AppDecorations.card(),
               child: Row(
                 children: [
-                  Icon(Icons.toggle_on_outlined, color: cs.primary),
+                  const Icon(Icons.toggle_on_outlined, color: AppColors.cyan500),
                   const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Active',
-                      style: TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                  Switch(
-                    value: _isActive,
-                    onChanged: (v) => setState(() => _isActive = v),
-                  ),
+                  const Expanded(child: Text('Active', style: TextStyle(fontWeight: FontWeight.w500, color: AppColors.slate200))),
+                  Switch(value: _isActive, onChanged: (v) => setState(() => _isActive = v)),
                 ],
               ),
             ),
             const SizedBox(height: 24),
             _SectionTitle(title: 'Contacts'),
             const SizedBox(height: 12),
-            ..._contacts.asMap().entries.map(
-              (e) => _ContactTile(
-                contact: e.value,
-                onEdit: () => _openContactDialog(index: e.key),
-                onDelete: () => setState(() => _contacts.removeAt(e.key)),
-              ),
-            ),
+            ..._contacts.asMap().entries.map((e) => _ContactTile(
+              contact: e.value,
+              onEdit: () => _openContactDialog(index: e.key),
+              onDelete: () => setState(() => _contacts.removeAt(e.key)),
+            )),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => _openContactDialog(),
               icon: const Icon(Icons.person_add_outlined),
               label: const Text('Add Contact'),
               style: OutlinedButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 minimumSize: const Size(double.infinity, 48),
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 52,
               child: FilledButton(
                 onPressed: _isLoading ? null : _save,
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
+                style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                 child: _isLoading
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        _isEditing ? 'Update Client' : 'Add Client',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Text(_isEditing ? 'Update Client' : 'Add Client',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
             const SizedBox(height: 32),
@@ -1060,7 +767,6 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
   void _openContactDialog({int? index}) {
     final isEdit = index != null;
     final existing = isEdit ? _contacts[index] : null;
-
     final nameCtrl = TextEditingController(text: existing?['name'] ?? '');
     final roleCtrl = TextEditingController(text: existing?['role'] ?? '');
     final phoneCtrl = TextEditingController(text: existing?['phone'] ?? '');
@@ -1069,50 +775,22 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          20,
-          20,
-          MediaQuery.of(ctx).viewInsets.bottom + 20,
-        ),
+        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              isEdit ? 'Edit Contact' : 'Add Contact',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            Text(isEdit ? 'Edit Contact' : 'Add Contact',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.slate100)),
             const SizedBox(height: 16),
-            _buildField(
-              controller: nameCtrl,
-              label: 'Name',
-              icon: Icons.person_outline,
-            ),
+            _buildField(controller: nameCtrl, label: 'Name', icon: Icons.person_outline),
             const SizedBox(height: 10),
-            _buildField(
-              controller: roleCtrl,
-              label: 'Role / Title',
-              icon: Icons.work_outline,
-            ),
+            _buildField(controller: roleCtrl, label: 'Role / Title', icon: Icons.work_outline),
             const SizedBox(height: 10),
-            _buildField(
-              controller: phoneCtrl,
-              label: 'Phone',
-              icon: Icons.phone_outlined,
-              keyboardType: TextInputType.phone,
-            ),
+            _buildField(controller: phoneCtrl, label: 'Phone', icon: Icons.phone_outlined, keyboardType: TextInputType.phone),
             const SizedBox(height: 10),
-            _buildField(
-              controller: emailCtrl,
-              label: 'Email',
-              icon: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress,
-            ),
+            _buildField(controller: emailCtrl, label: 'Email', icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
@@ -1121,28 +799,16 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
                 onPressed: () {
                   if (nameCtrl.text.trim().isEmpty) return;
                   final contact = {
-                    'id':
-                        existing?['id'] ??
-                        DateTime.now().millisecondsSinceEpoch.toString(),
+                    'id': existing?['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
                     'name': nameCtrl.text.trim(),
                     'role': roleCtrl.text.trim(),
                     'phone': phoneCtrl.text.trim(),
                     'email': emailCtrl.text.trim(),
                   };
-                  setState(() {
-                    if (isEdit) {
-                      _contacts[index] = contact;
-                    } else {
-                      _contacts.add(contact);
-                    }
-                  });
+                  setState(() { if (isEdit) _contacts[index] = contact; else _contacts.add(contact); });
                   Navigator.pop(ctx);
                 },
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+                style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                 child: Text(isEdit ? 'Update' : 'Add'),
               ),
             ),
@@ -1152,118 +818,52 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
     );
   }
 
-  Widget _buildField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    int maxLines = 1,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-  }) {
-    final cs = Theme.of(context).colorScheme;
+  Widget _buildField({required TextEditingController controller, required String label, required IconData icon,
+      int maxLines = 1, TextInputType? keyboardType, String? Function(String?)? validator}) {
     return TextFormField(
-      controller: controller,
-      maxLines: maxLines,
-      keyboardType: keyboardType,
-      validator: validator,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: cs.primary),
-        filled: true,
-        fillColor: cs.surfaceContainerHighest,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: cs.primary, width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: cs.error, width: 1.5),
-        ),
-      ),
+      controller: controller, maxLines: maxLines, keyboardType: keyboardType, validator: validator,
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon, size: 20)),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// CONTACT TILE
-// ══════════════════════════════════════════════════════════════════════════════
+// ── Contact Tile ──────────────────────────────────────────────────────────────
 
 class _ContactTile extends StatelessWidget {
   final Map<String, String> contact;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-
-  const _ContactTile({
-    required this.contact,
-    required this.onEdit,
-    required this.onDelete,
-  });
+  const _ContactTile({required this.contact, required this.onEdit, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: AppDecorations.card(),
       child: Row(
         children: [
-          Icon(Icons.person_outline_rounded, color: cs.primary, size: 20),
+          const Icon(Icons.person_outline_rounded, color: AppColors.cyan600, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  contact['name'] ?? '',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
+                Text(contact['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.slate100)),
                 if ((contact['role'] ?? '').isNotEmpty)
-                  Text(
-                    contact['role']!,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: cs.onSurface.withOpacity(0.55),
-                    ),
-                  ),
+                  Text(contact['role']!, style: const TextStyle(fontSize: 11, color: AppColors.slate500)),
               ],
             ),
           ),
-          IconButton(
-            icon: Icon(
-              Icons.edit_outlined,
-              size: 18,
-              color: cs.onSurface.withOpacity(0.5),
-            ),
-            onPressed: onEdit,
-          ),
-          IconButton(
-            icon: Icon(
-              Icons.delete_outline,
-              size: 18,
-              color: cs.error.withOpacity(0.7),
-            ),
-            onPressed: onDelete,
-          ),
+          IconButton(icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.cyan600), onPressed: onEdit),
+          IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error), onPressed: onDelete),
         ],
       ),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// EMPTY STATE
-// ══════════════════════════════════════════════════════════════════════════════
+// ── Empty State ───────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   final IconData icon;
@@ -1272,55 +872,30 @@ class _EmptyState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
-  const _EmptyState({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.actionLabel,
-    this.onAction,
-  });
+  const _EmptyState({required this.icon, required this.title, required this.subtitle, this.actionLabel, this.onAction});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 90,
-            height: 90,
+            width: 88, height: 88,
             decoration: BoxDecoration(
-              color: cs.primaryContainer.withOpacity(0.3),
+              color: AppColors.slate800,
               shape: BoxShape.circle,
+              border: Border.all(color: AppColors.slate700),
             ),
-            child: Icon(icon, size: 44, color: cs.primary.withOpacity(0.6)),
+            child: Icon(icon, size: 40, color: AppColors.slate500),
           ),
           const SizedBox(height: 20),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: cs.onSurface,
-            ),
-          ),
+          Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.slate200)),
           const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 13,
-              color: cs.onSurface.withOpacity(0.5),
-            ),
-            textAlign: TextAlign.center,
-          ),
+          Text(subtitle, style: const TextStyle(fontSize: 13, color: AppColors.slate400), textAlign: TextAlign.center),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: onAction,
-              icon: const Icon(Icons.add_rounded),
-              label: Text(actionLabel!),
-            ),
+            FilledButton.icon(onPressed: onAction, icon: const Icon(Icons.add_rounded), label: Text(actionLabel!)),
           ],
         ],
       ),
@@ -1336,26 +911,11 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Container(
-          width: 4,
-          height: 20,
-          decoration: BoxDecoration(
-            color: cs.primary,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
+        Container(width: 3, height: 16, decoration: BoxDecoration(color: AppColors.cyan500, borderRadius: BorderRadius.circular(2))),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: cs.primary,
-          ),
-        ),
+        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.cyan400)),
       ],
     );
   }

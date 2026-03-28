@@ -5,31 +5,32 @@ import '../../../home/presentation/controllers/home_providers.dart';
 import '../controllers/notification_providers.dart';
 import '../../../projects/presentation/screens/project_details_screen.dart';
 import '../../../projects/presentation/controllers/project_providers.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
     final notificationsAsync = ref.watch(myNotificationsProvider);
     final repo = ref.watch(notificationRepositoryProvider);
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: AppColors.slate900,
       appBar: AppBar(
-        backgroundColor: cs.surface,
-        elevation: 0,
-        title: const Text(
-          'Notifications',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        backgroundColor: AppColors.slate850,
+        title: const Text('Notifications'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: AppColors.slate700),
         ),
         actions: [
           notificationsAsync.maybeWhen(
             data: (notifs) => notifs.any((n) => !n.isRead)
                 ? TextButton.icon(
-                    icon: const Icon(Icons.done_all_rounded, size: 18),
-                    label: const Text('Mark all read'),
+                    icon: const Icon(Icons.done_all_rounded, size: 16, color: AppColors.cyan400),
+                    label: const Text('Mark all read',
+                        style: TextStyle(color: AppColors.cyan400, fontSize: 13)),
                     onPressed: () async {
                       final user = ref.read(currentUserProvider).value;
                       if (user != null) await repo.markAllAsRead(user.uid);
@@ -41,26 +42,36 @@ class NotificationsScreen extends ConsumerWidget {
         ],
       ),
       body: notificationsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.cyan500)),
+        error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
         data: (notifications) {
           if (notifications.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.notifications_none_rounded,
-                    size: 64,
-                    color: cs.onSurface.withOpacity(0.25),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No notifications yet',
-                    style: TextStyle(
-                      color: cs.onSurface.withOpacity(0.4),
-                      fontSize: 15,
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppColors.slate800,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.slate700),
                     ),
+                    child: const Icon(
+                      Icons.notifications_none_rounded,
+                      size: 44,
+                      color: AppColors.slate500,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'No notifications yet',
+                    style: TextStyle(color: AppColors.slate300, fontSize: 15, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'You\'re all caught up!',
+                    style: TextStyle(color: AppColors.slate500, fontSize: 12),
                   ),
                 ],
               ),
@@ -68,64 +79,86 @@ class NotificationsScreen extends ConsumerWidget {
           }
 
           return ListView.separated(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
             itemCount: notifications.length,
-            separatorBuilder: (_, __) =>
-                const Divider(height: 1, indent: 16, endIndent: 16),
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, i) {
               final n = notifications[i];
               return Dismissible(
                 key: Key(n.id),
                 direction: DismissDirection.endToStart,
                 background: Container(
-                  color: cs.errorContainer,
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                  ),
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 20),
-                  child: Icon(
-                    Icons.delete_outline_rounded,
-                    color: cs.onErrorContainer,
-                  ),
+                  child: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
                 ),
                 onDismissed: (_) => repo.deleteNotification(n.id),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  leading: _NotifIcon(type: n.type, isRead: n.isRead),
-                  title: Text(
-                    n.title,
-                    style: TextStyle(
-                      fontWeight: n.isRead
-                          ? FontWeight.normal
-                          : FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 2),
-                      Text(n.body, style: const TextStyle(fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Text(
-                        _timeAgo(n.createdAt),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: cs.onSurface.withOpacity(0.45),
-                        ),
-                      ),
-                    ],
-                  ),
-                  tileColor: n.isRead
-                      ? null
-                      : cs.primaryContainer.withOpacity(0.18),
+                child: InkWell(
                   onTap: () async {
                     if (!n.isRead) await repo.markAsRead(n.id);
                     if (context.mounted && n.projectId != null) {
                       _openProject(context, ref, n.projectId!);
                     }
                   },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: n.isRead ? AppColors.slate800 : AppColors.cyan900.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: n.isRead ? AppColors.slate700 : AppColors.cyan800.withOpacity(0.5),
+                        width: n.isRead ? 1 : 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _NotifIcon(type: n.type, isRead: n.isRead),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                n.title,
+                                style: TextStyle(
+                                  color: n.isRead ? AppColors.slate200 : AppColors.slate100,
+                                  fontWeight: n.isRead ? FontWeight.w400 : FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                n.body,
+                                style: const TextStyle(color: AppColors.slate400, fontSize: 12),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _timeAgo(n.createdAt),
+                                style: const TextStyle(color: AppColors.slate500, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (!n.isRead)
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(top: 4),
+                            decoration: const BoxDecoration(
+                              color: AppColors.cyan500,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               );
             },
@@ -155,6 +188,8 @@ class NotificationsScreen extends ConsumerWidget {
   }
 }
 
+// ── Notification Icon ─────────────────────────────────────────────────────────
+
 class _NotifIcon extends StatelessWidget {
   final String type;
   final bool isRead;
@@ -162,65 +197,50 @@ class _NotifIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     IconData icon;
     Color color;
     switch (type) {
       case 'task_assigned':
         icon = Icons.assignment_ind_outlined;
-        color = Colors.teal;
+        color = AppColors.cyan500;
         break;
       case 'task_status_change':
         icon = Icons.autorenew_rounded;
-        color = cs.primary;
+        color = AppColors.info;
         break;
       case 'task_comment':
         icon = Icons.comment_outlined;
-        color = Colors.orange;
+        color = AppColors.warning;
         break;
       case 'task_submitted':
         icon = Icons.send_rounded;
-        color = Colors.green;
+        color = AppColors.success;
         break;
       default:
         icon = Icons.notifications_outlined;
-        color = cs.primary;
+        color = AppColors.cyan500;
     }
 
-    return Stack(
-      children: [
-        CircleAvatar(
-          radius: 20,
-          backgroundColor: color.withOpacity(0.12),
-          child: Icon(icon, size: 20, color: color),
-        ),
-        if (!isRead)
-          Positioned(
-            right: 0,
-            top: 0,
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: cs.primary,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.5),
-              ),
-            ),
-          ),
-      ],
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Icon(icon, size: 20, color: color),
     );
   }
 }
 
-// ── Bell Icon مع Badge (للـ nav bar أو الـ AppBar) ──────────────────────────
+// ── Bell Icon with Badge ──────────────────────────────────────────────────────
+
 class NotificationBellIcon extends ConsumerWidget {
   const NotificationBellIcon({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
     final countAsync = ref.watch(unreadNotificationsCountProvider);
     final count = countAsync.value ?? 0;
 
@@ -234,10 +254,8 @@ class NotificationBellIcon extends ConsumerWidget {
         clipBehavior: Clip.none,
         children: [
           Icon(
-            count > 0
-                ? Icons.notifications_rounded
-                : Icons.notifications_none_rounded,
-            color: Colors.white,
+            count > 0 ? Icons.notifications_rounded : Icons.notifications_none_rounded,
+            color: count > 0 ? AppColors.cyan400 : AppColors.slate400,
           ),
           if (count > 0)
             Positioned(
@@ -245,19 +263,11 @@ class NotificationBellIcon extends ConsumerWidget {
               top: -4,
               child: Container(
                 padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  shape: count > 9 ? BoxShape.rectangle : BoxShape.circle,
-                  borderRadius: count > 9 ? BorderRadius.circular(8) : null,
-                ),
+                decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
                 constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                 child: Text(
                   count > 99 ? '99+' : '$count',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
               ),

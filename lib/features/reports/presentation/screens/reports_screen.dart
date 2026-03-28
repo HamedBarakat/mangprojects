@@ -176,8 +176,9 @@ class _ProjectsReportTabState extends State<_ProjectsReportTab> {
         .collection('projects')
         .where('officeId', isEqualTo: widget.user.officeId)
         .get();
-    if (mounted)
+    if (mounted) {
       setState(() => _data = snap.docs.map((d) => d.data()).toList());
+    }
   }
 
   List<Map<String, dynamic>> get _filtered {
@@ -369,8 +370,9 @@ class _TasksReportTabState extends State<_TasksReportTab> {
         .collection('tasks')
         .where('officeId', isEqualTo: widget.user.officeId)
         .get();
-    if (mounted)
+    if (mounted) {
       setState(() => _data = snap.docs.map((d) => d.data()).toList());
+    }
   }
 
   List<Map<String, dynamic>> get _filtered {
@@ -601,8 +603,9 @@ class _AttendanceReportTabState extends State<_AttendanceReportTab> {
         )
         .orderBy('date')
         .get();
-    if (mounted)
+    if (mounted) {
       setState(() => _data = snap.docs.map((d) => d.data()).toList());
+    }
   }
 
   @override
@@ -802,12 +805,15 @@ class _EmployeesReportTabState extends State<_EmployeesReportTab> {
         .collection('users')
         .where('officeId', isEqualTo: widget.user.officeId)
         .get();
-    if (mounted)
-      setState(() => _data = snap.docs
-          .map((d) => d.data())
-          // استبعاد الـ clients من تقرير الموظفين
-          .where((e) => e['role'] != 'client')
-          .toList());
+    if (mounted) {
+      setState(
+        () => _data = snap.docs
+            .map((d) => d.data())
+            // استبعاد الـ clients من تقرير الموظفين
+            .where((e) => e['role'] != 'client')
+            .toList(),
+      );
+    }
   }
 
   List<Map<String, dynamic>> get _filtered {
@@ -1027,8 +1033,9 @@ class _ClientsReportTabState extends State<_ClientsReportTab> {
         .where('officeId', isEqualTo: widget.user.officeId)
         .where('role', isEqualTo: 'client')
         .get();
-    if (mounted)
+    if (mounted) {
       setState(() => _data = snap.docs.map((d) => d.data()).toList());
+    }
   }
 
   @override
@@ -1059,14 +1066,21 @@ class _ClientsReportTabState extends State<_ClientsReportTab> {
             pw.SizedBox(height: 12),
             pw.Table.fromTextArray(
               headers: ['Code', 'Name', 'Email', 'Phone', 'Status'],
-              data: data.map((e) => [
-                e['employeeCode'] ?? '—',
-                e['name'] ?? '—',
-                e['email'] ?? '—',
-                e['phone'] ?? '—',
-                e['status'] ?? '—',
-              ]).toList(),
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+              data: data
+                  .map(
+                    (e) => [
+                      e['employeeCode'] ?? '—',
+                      e['name'] ?? '—',
+                      e['email'] ?? '—',
+                      e['phone'] ?? '—',
+                      e['status'] ?? '—',
+                    ],
+                  )
+                  .toList(),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+              ),
               cellStyle: const pw.TextStyle(fontSize: 9),
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
             ),
@@ -1086,8 +1100,15 @@ class _ClientsReportTabState extends State<_ClientsReportTab> {
     try {
       final excel = Excel.createExcel();
       final sheet = excel['Clients'];
-      sheet.appendRow(['Code','Name','Email','Phone','Status']
-          .map(TextCellValue.new).toList());
+      sheet.appendRow(
+        [
+          'Code',
+          'Name',
+          'Email',
+          'Phone',
+          'Status',
+        ].map(TextCellValue.new).toList(),
+      );
       for (final e in data) {
         sheet.appendRow([
           TextCellValue(e['employeeCode'] ?? ''),
@@ -1127,8 +1148,11 @@ class _ClientsReportBody extends StatelessWidget {
       filters: const SizedBox.shrink(),
       summary: _SummaryRow(
         items: [
-          _SI('Total Clients', clientUsers.length.toString(),
-              Icons.business_outlined),
+          _SI(
+            'Total Clients',
+            clientUsers.length.toString(),
+            Icons.business_outlined,
+          ),
           _SI(
             'Active',
             clientUsers.where((e) => e['isActive'] == true).length.toString(),
@@ -1144,13 +1168,17 @@ class _ClientsReportBody extends StatelessWidget {
       ),
       table: _Table(
         columns: const ['Code', 'Name', 'Email', 'Phone', 'Status'],
-        rows: clientUsers.map((e) => [
-          e['employeeCode'] ?? '—',
-          e['name'] ?? '—',
-          e['email'] ?? '—',
-          e['phone'] ?? '—',
-          e['status'] ?? '—',
-        ]).toList(),
+        rows: clientUsers
+            .map(
+              (e) => [
+                e['employeeCode'] ?? '—',
+                e['name'] ?? '—',
+                e['email'] ?? '—',
+                e['phone'] ?? '—',
+                e['status'] ?? '—',
+              ],
+            )
+            .toList(),
       ),
     );
   }

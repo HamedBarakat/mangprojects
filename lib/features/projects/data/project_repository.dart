@@ -12,7 +12,7 @@ class ProjectRepository {
     return _db
         .collection('projects')
         .where('officeId', isEqualTo: officeId)
-        .orderBy('createdAt', descending: true)
+        
         .snapshots()
         .map((snap) => snap.docs.map(ProjectModel.fromFirestore).toList());
   }
@@ -85,9 +85,12 @@ class ProjectRepository {
         .collection('projects')
         .doc(projectId)
         .collection('tasks')
-        .orderBy('createdAt', descending: false)
         .snapshots()
-        .map((snap) => snap.docs.map(TaskModel.fromFirestore).toList());
+        .map((snap) {
+          final list = snap.docs.map(TaskModel.fromFirestore).toList();
+          list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          return list;
+        });
   }
 
   Future<void> addTask(String projectId, Map<String, dynamic> data) async {
