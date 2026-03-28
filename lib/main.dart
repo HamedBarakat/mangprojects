@@ -19,6 +19,9 @@ void main() async {
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  // ✅ CRITICAL FIX: Disable Firestore offline persistence on Web.
+  // Web persistence causes stale cached data after logout/login,
+  // resulting in permission-denied errors for the new user's token.
   if (kIsWeb) {
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: false,
@@ -30,26 +33,7 @@ void main() async {
     anonKey: 'sb_publishable_RLRBugv6UKMD41b01_S81w_PiE8paQ1',
   );
 
-  runApp(const ProviderScope(child: MangProjectsRoot()));
-}
-
-class MangProjectsRoot extends StatelessWidget {
-  const MangProjectsRoot({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        final user = snapshot.data;
-
-        return ProviderScope(
-          key: ValueKey(user?.uid ?? 'guest'),
-          child: const MangProjectsApp(),
-        );
-      },
-    );
-  }
+  runApp(const ProviderScope(child: MangProjectsApp()));
 }
 
 class MangProjectsApp extends StatelessWidget {
@@ -83,9 +67,14 @@ class AuthWrapper extends ConsumerWidget {
           return const EnterOfficeCodeScreen();
         }
 
+        // ✅ FIX: Use StreamBuilder on authStateChanges instead of
+        // FirebaseAuth.instance.currentUser (synchronous, stale after logout).
+        // authStateChanges fires reliably when auth state changes,
+        // ensuring Firestore queries use a fresh, valid token.
         return StreamBuilder<User?>(
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
+            // Still waiting for auth state
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 backgroundColor: AppColors.slate900,
@@ -101,6 +90,8 @@ class AuthWrapper extends ConsumerWidget {
               return const LoginScreen();
             }
 
+            // With persistence disabled, no stale cache issues.
+            // authStateChanges already guarantees a valid auth state here.
             return const HomeScreen();
           },
         );
@@ -111,7 +102,9 @@ class AuthWrapper extends ConsumerWidget {
           child: CircularProgressIndicator(color: AppColors.cyan500),
         ),
       ),
-      error: (e, s) => Scaffold(body: Center(child: Text(e.toString()))),
+      error: (e, s) => Scaffold(
+        body: Center(child: Text(e.toString())),
+      ),
     );
   }
 }

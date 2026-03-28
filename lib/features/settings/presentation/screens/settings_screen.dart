@@ -2,7 +2,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mang_projects/features/auth/presentation/controllers/auth_providers.dart';
 
 import '../../../../features/home/presentation/controllers/home_providers.dart';
 import '../../../../features/home/data/models/user_model.dart';
@@ -114,10 +113,7 @@ class SettingsScreen extends ConsumerWidget {
               label: 'App Version',
               iconColor: AppColors.slate400,
               trailing: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(
                   color: AppColors.slate700,
                   borderRadius: BorderRadius.circular(20),
@@ -151,7 +147,8 @@ class SettingsScreen extends ConsumerWidget {
               onTap: () async {
                 final confirm = await _confirmLogout(context);
                 if (confirm == true) {
-                  // Invalidate ALL providers so all Firestore streams stop cleanly
+                  ref.invalidate(taskRepositoryProvider);
+                  ref.invalidate(projectRepositoryProvider);
                   ref.invalidate(currentUserProvider);
                   ref.invalidate(projectsProvider);
                   ref.invalidate(singleProjectProvider);
@@ -166,7 +163,6 @@ class SettingsScreen extends ConsumerWidget {
                   await ref.read(localStorageProvider).clearAll();
                   await ref.read(selectedOfficeProvider.notifier).clearOffice();
                   // Sign out — authStateChanges fires → AuthWrapper shows LoginScreen
-                  ref.invalidate(authStateProvider);
                   await FirebaseAuth.instance.signOut();
                 }
               },
@@ -248,11 +244,7 @@ class _JobTitlesManagementScreenState
           children: [
             Text(
               _groups[groupIdx].title,
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.cyan500,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 11, color: AppColors.cyan500, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             TextField(
@@ -263,10 +255,7 @@ class _JobTitlesManagementScreenState
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(context, ctrl.text.trim()),
             child: const Text('Save'),
@@ -276,10 +265,7 @@ class _JobTitlesManagementScreenState
     );
     if (result != null && result.isNotEmpty) {
       setState(() {
-        _groups[groupIdx].entries[entryIdx] = _JobTitleEntry(
-          key: entry.key,
-          label: result,
-        );
+        _groups[groupIdx].entries[entryIdx] = _JobTitleEntry(key: entry.key, label: result);
       });
     }
   }
@@ -297,9 +283,7 @@ class _JobTitlesManagementScreenState
             TextField(
               controller: labelCtrl,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Title Label (e.g. Senior Architect)',
-              ),
+              decoration: const InputDecoration(labelText: 'Title Label (e.g. Senior Architect)'),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -312,27 +296,17 @@ class _JobTitlesManagementScreenState
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add')),
         ],
       ),
     );
-    if (result == true &&
-        labelCtrl.text.trim().isNotEmpty &&
-        keyCtrl.text.trim().isNotEmpty) {
+    if (result == true && labelCtrl.text.trim().isNotEmpty && keyCtrl.text.trim().isNotEmpty) {
       setState(() {
-        _groups[groupIdx].entries.add(
-          _JobTitleEntry(
-            key: keyCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
-            label: labelCtrl.text.trim(),
-          ),
-        );
+        _groups[groupIdx].entries.add(_JobTitleEntry(
+          key: keyCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
+          label: labelCtrl.text.trim(),
+        ));
       });
     }
   }
@@ -346,26 +320,16 @@ class _JobTitlesManagementScreenState
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Group Name (e.g. Surveying)',
-          ),
+          decoration: const InputDecoration(labelText: 'Group Name (e.g. Surveying)'),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-            child: const Text('Add'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()), child: const Text('Add')),
         ],
       ),
     );
     if (result != null && result.isNotEmpty) {
-      setState(
-        () => _groups.add(_JobTitleGroupState(title: result, entries: [])),
-      );
+      setState(() => _groups.add(_JobTitleGroupState(title: result, entries: [])));
     }
   }
 
@@ -377,10 +341,7 @@ class _JobTitlesManagementScreenState
         title: const Text('Delete Job Title'),
         content: Text('Delete "$label"?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.pop(context, true),
@@ -389,8 +350,7 @@ class _JobTitlesManagementScreenState
         ],
       ),
     );
-    if (confirm == true)
-      setState(() => _groups[groupIdx].entries.removeAt(entryIdx));
+    if (confirm == true) setState(() => _groups[groupIdx].entries.removeAt(entryIdx));
   }
 
   Future<void> _save() async {
@@ -404,23 +364,19 @@ class _JobTitlesManagementScreenState
           titles: {for (final e in g.entries) e.key: e.label},
         );
       }).toList();
-      await ref
-          .read(officeSettingsRepositoryProvider)
-          .saveJobTitleGroups(officeId: user.officeId, groups: groupData);
+      await ref.read(officeSettingsRepositoryProvider).saveJobTitleGroups(
+        officeId: user.officeId,
+        groups: groupData,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Job titles saved ✓'),
-            behavior: SnackBarBehavior.floating,
-          ),
+          const SnackBar(content: Text('Job titles saved ✓'), behavior: SnackBarBehavior.floating),
         );
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -433,8 +389,7 @@ class _JobTitlesManagementScreenState
     settingsAsync.whenData((settings) {
       if (!_initialized) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !_initialized)
-            setState(() => _initGroups(settings.effectiveJobTitleGroups));
+          if (mounted && !_initialized) setState(() => _initGroups(settings.effectiveJobTitleGroups));
         });
       }
     });
@@ -446,9 +401,7 @@ class _JobTitlesManagementScreenState
           backgroundColor: AppColors.slate850,
           title: const Text('Manage Job Titles'),
         ),
-        body: const Center(
-          child: CircularProgressIndicator(color: AppColors.cyan500),
-        ),
+        body: const Center(child: CircularProgressIndicator(color: AppColors.cyan500)),
       );
     }
 
@@ -464,25 +417,11 @@ class _JobTitlesManagementScreenState
         actions: [
           TextButton.icon(
             icon: _saving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.cyan400,
-                    ),
-                  )
-                : const Icon(
-                    Icons.save_rounded,
-                    color: AppColors.cyan400,
-                    size: 18,
-                  ),
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.cyan400))
+                : const Icon(Icons.save_rounded, color: AppColors.cyan400, size: 18),
             label: Text(
               _saving ? 'Saving...' : 'Save',
-              style: const TextStyle(
-                color: AppColors.cyan400,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(color: AppColors.cyan400, fontWeight: FontWeight.bold),
             ),
             onPressed: _saving ? null : _save,
           ),
@@ -502,11 +441,7 @@ class _JobTitlesManagementScreenState
             ),
             child: const Row(
               children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  color: AppColors.cyan400,
-                  size: 18,
-                ),
+                Icon(Icons.info_outline_rounded, color: AppColors.cyan400, size: 18),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -536,9 +471,7 @@ class _JobTitlesManagementScreenState
             onPressed: _addGroup,
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 32),
@@ -572,28 +505,17 @@ class _GroupHeader extends StatelessWidget {
         Container(
           width: 3,
           height: 16,
-          decoration: BoxDecoration(
-            color: AppColors.cyan500,
-            borderRadius: BorderRadius.circular(2),
-          ),
+          decoration: BoxDecoration(color: AppColors.cyan500, borderRadius: BorderRadius.circular(2)),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: AppColors.cyan400,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.cyan400),
           ),
         ),
         IconButton(
-          icon: const Icon(
-            Icons.add_circle_outline_rounded,
-            color: AppColors.cyan500,
-            size: 20,
-          ),
+          icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.cyan500, size: 20),
           onPressed: onAdd,
           tooltip: 'Add to $title',
           padding: EdgeInsets.zero,
@@ -608,11 +530,7 @@ class _JobTitleTile extends StatelessWidget {
   final _JobTitleEntry entry;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-  const _JobTitleTile({
-    required this.entry,
-    required this.onEdit,
-    required this.onDelete,
-  });
+  const _JobTitleTile({required this.entry, required this.onEdit, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -625,41 +543,19 @@ class _JobTitleTile extends StatelessWidget {
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-        leading: const Icon(
-          Icons.work_outline_rounded,
-          color: AppColors.slate500,
-          size: 20,
-        ),
-        title: Text(
-          entry.label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: AppColors.slate200,
-          ),
-        ),
-        subtitle: Text(
-          entry.key,
-          style: const TextStyle(fontSize: 11, color: AppColors.slate500),
-        ),
+        leading: const Icon(Icons.work_outline_rounded, color: AppColors.slate500, size: 20),
+        title: Text(entry.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.slate200)),
+        subtitle: Text(entry.key, style: const TextStyle(fontSize: 11, color: AppColors.slate500)),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: const Icon(
-                Icons.edit_outlined,
-                size: 18,
-                color: AppColors.cyan600,
-              ),
+              icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.cyan600),
               onPressed: onEdit,
               tooltip: 'Edit',
             ),
             IconButton(
-              icon: const Icon(
-                Icons.delete_outline_rounded,
-                size: 18,
-                color: AppColors.error,
-              ),
+              icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.error),
               onPressed: onDelete,
               tooltip: 'Delete',
             ),
@@ -678,10 +574,7 @@ class _ProfileCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final customTitles = ref
-        .watch(officeSettingsProvider)
-        .valueOrNull
-        ?.effectiveJobTitles;
+    final customTitles = ref.watch(officeSettingsProvider).valueOrNull?.effectiveJobTitles;
     final titleLabel = user?.jobTitleLabelFrom(customTitles) ?? '—';
     final roleColor = AppStatusColors.forRole(user?.role ?? '');
 
@@ -698,11 +591,7 @@ class _ProfileCard extends ConsumerWidget {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: Colors.white.withOpacity(0.2)),
             ),
-            child: const Icon(
-              Icons.person_rounded,
-              color: Colors.white,
-              size: 28,
-            ),
+            child: const Icon(Icons.person_rounded, color: Colors.white, size: 28),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -711,26 +600,16 @@ class _ProfileCard extends ConsumerWidget {
               children: [
                 Text(
                   user?.name ?? '—',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   titleLabel,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.75),
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12),
                 ),
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 3,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(20),
@@ -738,9 +617,7 @@ class _ProfileCard extends ConsumerWidget {
                   child: Text(
                     user?.roleLabel ?? '—',
                     style: TextStyle(
-                      color: roleColor == AppColors.cyan500
-                          ? AppColors.cyan200
-                          : Colors.white,
+                      color: roleColor == AppColors.cyan500 ? AppColors.cyan200 : Colors.white,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -762,11 +639,7 @@ class _WorkHoursCard extends ConsumerStatefulWidget {
   final String officeId;
   final WidgetRef ref;
 
-  const _WorkHoursCard({
-    required this.office,
-    required this.officeId,
-    required this.ref,
-  });
+  const _WorkHoursCard({required this.office, required this.officeId, required this.ref});
 
   @override
   ConsumerState<_WorkHoursCard> createState() => _WorkHoursCardState();
@@ -795,10 +668,7 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
 
   @override
   Widget build(BuildContext context) {
-    final workHours =
-        _endTime.hour -
-        _startTime.hour +
-        (_endTime.minute - _startTime.minute) / 60;
+    final workHours = _endTime.hour - _startTime.hour + (_endTime.minute - _startTime.minute) / 60;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -814,30 +684,16 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
                   color: AppColors.cyan500.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
-                  Icons.schedule_rounded,
-                  color: AppColors.cyan500,
-                  size: 20,
-                ),
+                child: const Icon(Icons.schedule_rounded, color: AppColors.cyan500, size: 20),
               ),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Work Hours',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: AppColors.slate100,
-                    ),
-                  ),
+                  const Text('Work Hours', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.slate100)),
                   Text(
                     '${workHours.toStringAsFixed(1)} hrs/day',
-                    style: const TextStyle(
-                      color: AppColors.slate400,
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: AppColors.slate400, fontSize: 12),
                   ),
                 ],
               ),
@@ -873,14 +729,7 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
             child: FilledButton.icon(
               onPressed: _saving ? null : _save,
               icon: _saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.save_rounded, size: 18),
               label: Text(_saving ? 'Saving...' : 'Save Work Hours'),
             ),
@@ -902,10 +751,8 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
     );
     if (picked != null) {
       setState(() {
-        if (isStart)
-          _startTime = picked;
-        else
-          _endTime = picked;
+        if (isStart) _startTime = picked;
+        else _endTime = picked;
       });
     }
   }
@@ -921,23 +768,18 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
     }
     setState(() => _saving = true);
     try {
-      await ref
-          .read(officeRepositoryProvider)
-          .updateWorkHours(
-            officeId: widget.officeId,
-            workStartTime: _formatTime(_startTime),
-            workEndTime: _formatTime(_endTime),
-          );
+      await ref.read(officeRepositoryProvider).updateWorkHours(
+        officeId: widget.officeId,
+        workStartTime: _formatTime(_startTime),
+        workEndTime: _formatTime(_endTime),
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Work hours updated successfully ✓')),
         );
       }
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -945,10 +787,7 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
 
   TimeOfDay _parseTime(String time) {
     final parts = time.split(':');
-    return TimeOfDay(
-      hour: int.tryParse(parts[0]) ?? 9,
-      minute: int.tryParse(parts[1]) ?? 0,
-    );
+    return TimeOfDay(hour: int.tryParse(parts[0]) ?? 9, minute: int.tryParse(parts[1]) ?? 0);
   }
 
   String _formatTime(TimeOfDay t) =>
@@ -990,25 +829,15 @@ class _TimePicker extends StatelessWidget {
               children: [
                 Icon(icon, color: color, size: 13),
                 const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: TextStyle(color: color.withOpacity(0.8), fontSize: 11),
-                ),
+                Text(label, style: TextStyle(color: color.withOpacity(0.8), fontSize: 11)),
               ],
             ),
             const SizedBox(height: 6),
             Text(
               '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
-              style: TextStyle(
-                color: color,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.bold),
             ),
-            Text(
-              'Tap to change',
-              style: TextStyle(color: color.withOpacity(0.5), fontSize: 10),
-            ),
+            Text('Tap to change', style: TextStyle(color: color.withOpacity(0.5), fontSize: 10)),
           ],
         ),
       ),
@@ -1029,19 +858,12 @@ class _SectionHeader extends StatelessWidget {
         Container(
           width: 3,
           height: 16,
-          decoration: BoxDecoration(
-            color: AppColors.cyan500,
-            borderRadius: BorderRadius.circular(2),
-          ),
+          decoration: BoxDecoration(color: AppColors.cyan500, borderRadius: BorderRadius.circular(2)),
         ),
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(
-            color: AppColors.slate100,
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-          ),
+          style: const TextStyle(color: AppColors.slate100, fontWeight: FontWeight.bold, fontSize: 15),
         ),
       ],
     );
@@ -1087,11 +909,7 @@ class _SettingsTile extends StatelessWidget {
                 color: (iconColor ?? AppColors.slate400).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(9),
               ),
-              child: Icon(
-                icon,
-                color: iconColor ?? AppColors.slate400,
-                size: 18,
-              ),
+              child: Icon(icon, color: iconColor ?? AppColors.slate400, size: 18),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -1106,11 +924,7 @@ class _SettingsTile extends StatelessWidget {
             ),
             if (trailing != null) trailing!,
             if (onTap != null && trailing == null)
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.slate600,
-                size: 20,
-              ),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.slate600, size: 20),
           ],
         ),
       ),
@@ -1124,8 +938,7 @@ class _ChangePasswordDialog extends ConsumerStatefulWidget {
   const _ChangePasswordDialog();
 
   @override
-  ConsumerState<_ChangePasswordDialog> createState() =>
-      _ChangePasswordDialogState();
+  ConsumerState<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
 }
 
 class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
@@ -1150,10 +963,7 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
 
   Future<void> _changePassword() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    setState(() { _isLoading = true; _errorMessage = null; });
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Not logged in');
@@ -1166,10 +976,7 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password changed successfully ✓'),
-            backgroundColor: AppColors.success,
-          ),
+          const SnackBar(content: Text('Password changed successfully ✓'), backgroundColor: AppColors.success),
         );
       }
     } on FirebaseAuthException catch (e) {
@@ -1212,13 +1019,8 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
                   labelText: 'Current Password',
                   prefixIcon: const Icon(Icons.lock_outline_rounded),
                   suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureCurrent
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                    ),
-                    onPressed: () =>
-                        setState(() => _obscureCurrent = !_obscureCurrent),
+                    icon: Icon(_obscureCurrent ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                    onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
                   ),
                 ),
                 validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
@@ -1231,19 +1033,14 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
                   labelText: 'New Password',
                   prefixIcon: const Icon(Icons.lock_rounded),
                   suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureNew
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                    ),
+                    icon: Icon(_obscureNew ? Icons.visibility_outlined : Icons.visibility_off_outlined),
                     onPressed: () => setState(() => _obscureNew = !_obscureNew),
                   ),
                 ),
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Required';
                   if (v.length < 6) return 'Minimum 6 characters';
-                  if (v == _currentCtrl.text)
-                    return 'Must be different from current';
+                  if (v == _currentCtrl.text) return 'Must be different from current';
                   return null;
                 },
               ),
@@ -1255,13 +1052,8 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
                   labelText: 'Confirm New Password',
                   prefixIcon: const Icon(Icons.lock_reset_rounded),
                   suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureConfirm
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                    ),
-                    onPressed: () =>
-                        setState(() => _obscureConfirm = !_obscureConfirm),
+                    icon: Icon(_obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                    onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                   ),
                 ),
                 validator: (v) {
@@ -1273,10 +1065,7 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
               if (_errorMessage != null) ...[
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: AppColors.error.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
@@ -1284,21 +1073,9 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.error_outline_rounded,
-                        color: AppColors.error,
-                        size: 16,
-                      ),
+                      const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 16),
                       const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _errorMessage!,
-                          style: const TextStyle(
-                            color: AppColors.error,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
+                      Expanded(child: Text(_errorMessage!, style: const TextStyle(color: AppColors.error, fontSize: 12))),
                     ],
                   ),
                 ),
@@ -1316,14 +1093,7 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
           onPressed: _isLoading ? null : _changePassword,
           style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
           child: _isLoading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : const Text('Change'),
         ),
       ],
