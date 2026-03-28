@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mang_projects/features/auth/presentation/controllers/auth_providers.dart';
 
 import '../../data/models/user_model.dart';
 import '../controllers/home_providers.dart';
@@ -49,7 +50,9 @@ class HomeScreen extends ConsumerWidget {
         if (user == null) {
           return const Scaffold(
             backgroundColor: AppColors.slate900,
-            body: Center(child: CircularProgressIndicator(color: AppColors.cyan500)),
+            body: Center(
+              child: CircularProgressIndicator(color: AppColors.cyan500),
+            ),
           );
         }
         return _HomeScaffold(user: user);
@@ -147,8 +150,7 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
               ),
             ),
           ),
-          if (!user.isClient && !user.isAdministration)
-            _HomeNotificationBell(),
+          if (!user.isClient && !user.isAdministration) _HomeNotificationBell(),
           IconButton(
             icon: const Icon(Icons.logout_rounded, size: 20),
             color: AppColors.slate400,
@@ -374,30 +376,26 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
   }
 }
 
-  // ── Logout: clear all caches and reset providers ─────────────────────────
-  Future<void> _performLogout(WidgetRef ref) async {
-    // Invalidate ALL providers BEFORE sign-out so all Firestore streams
-    // are cancelled and recreated fresh when the next user logs in.
-    // projectTasksProvider and projectTaskStatsProvider are family providers
-    // that hold per-project streams — invalidating by type clears all instances.
-    ref.invalidate(currentUserProvider);
-    ref.invalidate(projectsProvider);
-    ref.invalidate(singleProjectProvider);
-    ref.invalidate(allVisibleTasksProvider);
-    ref.invalidate(projectTasksProvider);      // ✅ clears ALL project task streams
-    ref.invalidate(projectTaskStatsProvider);  // ✅ clears ALL stats
-    ref.invalidate(teamLeaderReviewTasksProvider);
-    ref.invalidate(qcReviewTasksProvider);
-    ref.invalidate(unreadNotificationsCountProvider);
-    ref.invalidate(employeesProvider);
+// ── Logout: clear all caches and reset providers ─────────────────────────
+Future<void> _performLogout(WidgetRef ref) async {
+  ref.invalidate(currentUserProvider);
+  ref.invalidate(projectsProvider);
+  ref.invalidate(singleProjectProvider);
+  ref.invalidate(allVisibleTasksProvider);
+  ref.invalidate(projectTasksProvider);
+  ref.invalidate(projectTaskStatsProvider);
+  ref.invalidate(teamLeaderReviewTasksProvider);
+  ref.invalidate(qcReviewTasksProvider);
+  ref.invalidate(unreadNotificationsCountProvider);
+  ref.invalidate(employeesProvider);
 
-    // Clear selected office from local storage
-    await ref.read(selectedOfficeProvider.notifier).clearOffice();
+  await ref.read(selectedOfficeProvider.notifier).clearOffice();
 
-    // Sign out — authStateChanges stream fires → AuthWrapper shows LoginScreen
-    await FirebaseAuth.instance.signOut();
-  }
+  // الحل الصحيح
+  ref.invalidate(authStateProvider);
 
+  await FirebaseAuth.instance.signOut();
+}
 
 // ── Dashboard Tab ─────────────────────────────────────────────────────────────
 
@@ -440,7 +438,9 @@ class _DashboardTab extends ConsumerWidget {
                     child: _StatCard(
                       icon: Icons.business_center_rounded,
                       label: 'Active Projects',
-                      value: projectsAsync.isLoading ? '...' : activeProjectsCount.toString(),
+                      value: projectsAsync.isLoading
+                          ? '...'
+                          : activeProjectsCount.toString(),
                       color: AppColors.cyan500,
                     ),
                   ),
@@ -478,7 +478,10 @@ class _DashboardTab extends ConsumerWidget {
                       icon: Icons.check_circle_rounded,
                       label: 'Completed',
                       value: projectsAsync.when(
-                        data: (list) => list.where((p) => p.status == 'completed').length.toString(),
+                        data: (list) => list
+                            .where((p) => p.status == 'completed')
+                            .length
+                            .toString(),
                         loading: () => '...',
                         error: (_, _) => '—',
                       ),
@@ -503,7 +506,9 @@ class _DashboardTab extends ConsumerWidget {
                     color: AppColors.cyan500,
                     onTap: () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const AddEditProjectScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const AddEditProjectScreen(),
+                      ),
                     ),
                   ),
                 ),
@@ -515,7 +520,9 @@ class _DashboardTab extends ConsumerWidget {
                     color: Colors.purple,
                     onTap: () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const AddEditEmployeeScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const AddEditEmployeeScreen(),
+                      ),
                     ),
                   ),
                 ),
@@ -536,14 +543,19 @@ class _DashboardTab extends ConsumerWidget {
                     context,
                     MaterialPageRoute(builder: (_) => const ProjectsScreen()),
                   ),
-                  child: const Text('View all', style: TextStyle(color: AppColors.cyan400, fontSize: 12)),
+                  child: const Text(
+                    'View all',
+                    style: TextStyle(color: AppColors.cyan400, fontSize: 12),
+                  ),
                 ),
             ],
           ),
           const SizedBox(height: 12),
 
           if (projectsAsync.isLoading)
-            const Center(child: CircularProgressIndicator(color: AppColors.cyan500))
+            const Center(
+              child: CircularProgressIndicator(color: AppColors.cyan500),
+            )
           else if (recentProjects.isEmpty)
             Container(
               width: double.infinity,
@@ -573,7 +585,9 @@ class _DashboardTab extends ConsumerWidget {
                     FilledButton.icon(
                       onPressed: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const AddEditProjectScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const AddEditProjectScreen(),
+                        ),
                       ),
                       icon: const Icon(Icons.add_rounded, size: 18),
                       label: const Text('Add First Project'),
@@ -593,7 +607,8 @@ class _DashboardTab extends ConsumerWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ProjectDetailsScreen(project: recentProjects[i]),
+                    builder: (_) =>
+                        ProjectDetailsScreen(project: recentProjects[i]),
                   ),
                 ),
               ),
@@ -612,7 +627,12 @@ class _DashboardTab extends ConsumerWidget {
     if (user.isReviewer || user.isManagement) {
       final qcTasksAsync = ref.watch(qcTasksProvider);
       return qcTasksAsync.when(
-        data: (tasks) => tasks.where((t) => t.status == 'qc_review' || t.status == 'client_review').length.toString(),
+        data: (tasks) => tasks
+            .where(
+              (t) => t.status == 'qc_review' || t.status == 'client_review',
+            )
+            .length
+            .toString(),
         loading: () => '...',
         error: (_, _) => '0',
       );
@@ -621,7 +641,10 @@ class _DashboardTab extends ConsumerWidget {
     if (user.isTeamLeader) {
       final teamLeaderTasksAsync = ref.watch(teamLeaderTasksProvider);
       return teamLeaderTasksAsync.when(
-        data: (tasks) => tasks.where((t) => t.status == 'team_leader_review').length.toString(),
+        data: (tasks) => tasks
+            .where((t) => t.status == 'team_leader_review')
+            .length
+            .toString(),
         loading: () => '...',
         error: (_, _) => '0',
       );
@@ -629,7 +652,10 @@ class _DashboardTab extends ConsumerWidget {
 
     final myTasksAsync = ref.watch(myTasksProvider);
     return myTasksAsync.when(
-      data: (tasks) => tasks.where((t) => t.status == 'not_started' || t.status == 'in_progress').length.toString(),
+      data: (tasks) => tasks
+          .where((t) => t.status == 'not_started' || t.status == 'in_progress')
+          .length
+          .toString(),
       loading: () => '...',
       error: (_, _) => '0',
     );
@@ -644,7 +670,10 @@ class _OfficeCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final customTitles = ref.watch(officeSettingsProvider).valueOrNull?.effectiveJobTitles;
+    final customTitles = ref
+        .watch(officeSettingsProvider)
+        .valueOrNull
+        ?.effectiveJobTitles;
     final titleLabel = user.jobTitleLabelFrom(customTitles);
 
     return Container(
@@ -661,7 +690,11 @@ class _OfficeCard extends ConsumerWidget {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: Colors.white.withOpacity(0.2)),
             ),
-            child: const Icon(Icons.domain_rounded, color: Colors.white, size: 26),
+            child: const Icon(
+              Icons.domain_rounded,
+              color: Colors.white,
+              size: 26,
+            ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -679,7 +712,10 @@ class _OfficeCard extends ConsumerWidget {
                 const SizedBox(height: 4),
                 Text(
                   titleLabel,
-                  style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.75),
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -691,7 +727,13 @@ class _OfficeCard extends ConsumerWidget {
             decoration: BoxDecoration(
               color: AppColors.cyan400,
               shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: AppColors.cyan400, blurRadius: 8, spreadRadius: 2)],
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.cyan400,
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                ),
+              ],
             ),
           ),
         ],
@@ -756,7 +798,11 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.slate700),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
@@ -862,7 +908,9 @@ class _HomeNotificationBell extends ConsumerWidget {
         clipBehavior: Clip.none,
         children: [
           Icon(
-            count > 0 ? Icons.notifications_rounded : Icons.notifications_none_rounded,
+            count > 0
+                ? Icons.notifications_rounded
+                : Icons.notifications_none_rounded,
             color: count > 0 ? AppColors.cyan400 : AppColors.slate400,
             size: 22,
           ),

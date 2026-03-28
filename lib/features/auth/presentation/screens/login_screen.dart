@@ -1,6 +1,8 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mang_projects/features/home/presentation/controllers/home_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../main.dart';
@@ -71,6 +73,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             email: _emailController.text.trim(),
             password: _passwordController.text.trim(),
           );
+
+      await Future.delayed(const Duration(milliseconds: 300));
+      await FirebaseAuth.instance.currentUser?.getIdToken(true);
+      ref.invalidate(currentUserProvider);
+      await Future.delayed(const Duration(milliseconds: 200));
 
       // Save credentials in memory for developer session
       ref.read(devCredentialsProvider.notifier).state = DevCredentials(

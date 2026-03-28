@@ -18,7 +18,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 final androidAuthUidProvider = StateProvider<String?>((ref) => null);
 
 /// Stream Provider لمراقبة حالة تسجيل الدخول
-final authStateProvider = StreamProvider<User?>((ref) {
+final authStateProvider = StreamProvider.autoDispose<User?>((ref) {
   final repo = ref.read(authRepositoryProvider);
   return repo.authStateChanges();
 });
@@ -38,8 +38,7 @@ final effectiveUidProvider = Provider<String?>((ref) {
 });
 
 /// Provider لجلب بيانات المستخدم من Firestore
-final userDataProvider =
-    FutureProvider.family<bool, String>((ref, uid) async {
+final userDataProvider = FutureProvider.family<bool, String>((ref, uid) async {
   final repo = ref.read(authRepositoryProvider);
   return await repo.isUserActivated(uid);
 });

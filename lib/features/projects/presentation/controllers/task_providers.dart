@@ -73,28 +73,29 @@ final projectTaskStatsProvider =
       return ref.watch(taskRepositoryProvider).getProjectTaskStats(projectId);
     });
 
-final teamLeaderReviewTasksProvider = StreamProvider<List<TaskModel>>((
-  ref,
-) async* {
-  final user = await ref.watch(currentUserProvider.future);
-  // ✅ FIX: use isTeamLeader only, not canManageTasks
-  if (user == null || !user.isTeamLeader) {
-    yield const <TaskModel>[];
-    return;
-  }
+final teamLeaderReviewTasksProvider =
+    StreamProvider.autoDispose<List<TaskModel>>((ref) async* {
+      final user = await ref.watch(currentUserProvider.future);
+      // ✅ FIX: use isTeamLeader only, not canManageTasks
+      if (user == null || !user.isTeamLeader) {
+        yield const <TaskModel>[];
+        return;
+      }
 
-  final repo = ref.watch(taskRepositoryProvider);
-  await for (final tasks in repo.watchTasksByTeamLeader(user.uid)) {
-    final filtered =
-        tasks.where((t) => t.status == 'team_leader_review').toList()
-          ..sort((a, b) => a.endDate.compareTo(b.endDate));
-    yield filtered;
-  }
-});
+      final repo = ref.watch(taskRepositoryProvider);
+      await for (final tasks in repo.watchTasksByTeamLeader(user.uid)) {
+        final filtered =
+            tasks.where((t) => t.status == 'team_leader_review').toList()
+              ..sort((a, b) => a.endDate.compareTo(b.endDate));
+        yield filtered;
+      }
+    });
 
 final pendingTeamLeaderReviewTasksProvider = teamLeaderReviewTasksProvider;
 
-final qcReviewTasksProvider = StreamProvider<List<TaskModel>>((ref) async* {
+final qcReviewTasksProvider = StreamProvider.autoDispose<List<TaskModel>>((
+  ref,
+) async* {
   final user = await ref.watch(currentUserProvider.future);
   if (user == null || !user.isReviewer) {
     yield const <TaskModel>[];
@@ -118,6 +119,7 @@ final pendingTeamLeaderReviewCountProvider = Provider<int>((ref) {
 });
 
 final qcTasksProvider = qcReviewTasksProvider;
+
 final teamLeaderTasksProvider = teamLeaderReviewTasksProvider;
 
 final pendingQcReviewCountProvider = Provider<int>((ref) {
