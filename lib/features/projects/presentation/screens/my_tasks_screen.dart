@@ -32,13 +32,10 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen>
 
   int _tabCount(dynamic user) {
     if (user == null) return 1;
-    // ✅ All roles that need 2 tabs:
-    if (user.isTeamLeader) return 2;   // Pending Review | In Progress
-    if (user.isReviewer) return 2;      // Pending QC | All Tasks
-    if (user.isManagement) return 2;    // All Tasks | My Tasks
-    if (user.isDC) return 2;            // DC tasks | (same)
-    if (user.isAdmin) return 2;         // All Tasks | Completed
-    return 1;                            // Engineer: single filtered list
+    // All roles get 2 tabs
+    // Client gets 1 tab (only sees client_review tasks assigned to them)
+    if (user.isClient) return 1;
+    return 2;
   }
 
   @override
@@ -52,68 +49,72 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen>
     final cs = Theme.of(context).colorScheme;
     final user = ref.watch(currentUserProvider).value;
     final isReviewer = user?.isReviewer ?? false;
-    // ✅ FIX: use isTeamLeader NOT canManageTasks (canManageTasks includes Admin)
     final isTeamLeader = user?.isTeamLeader ?? false;
-    final isClient = user?.role == 'client'; // ✅ جديد
-
-    final qcBadge = ref.watch(pendingQcReviewCountProvider);
-    final teamLeaderBadge = ref.watch(pendingTeamLeaderReviewCountProvider);
 
     List<Widget> tabs = [];
     List<Widget> tabViews = [];
 
-    if (isTeamLeader) {
-      // Team Leader: 2 tabs
-      // Tab 1 — Pending Review: tasks وصلته في مرحلة team_leader_review
-      // Tab 2 — In Progress: tasks مشاريعه النشطة (not_started + in_progress)
+    // ══════════════════════════════════════════════════════════════════════
+    // TAB DESIGN:
+    //   "My Tasks"  → tasks this user has a direct role in (any active status)
+    //   "All Tasks" → full office view (Admin/Mgmt/Reviewer/DC/TL)
+    //   Client      → single tab, only their client_review tasks
+    //
+    // Every task stays visible to all stakeholders until completed (archived).
+    // Actions only appear for the role whose turn it is in the workflow.
+    // ══════════════════════════════════════════════════════════════════════
+
+    final isClient = user?.isClient ?? false;
+
+    if (isClient) {
+      // Client: single tab — only sees tasks pending their approval
+      tabs = [const Tab(text: 'My Reviews')];
+      tabViews = [_MyTasksTrackerList(user: user)];
+    } else if (isTeamLeader) {
       tabs = [
-        const Tab(text: 'Pending Review'),
-        const Tab(text: 'In Progress'),
-      ];
-      tabViews = [
-        _UnifiedTasksList(
-          statusFilter: 'team_leader_review',
-          user: user,
-          showOnlyAssigned: true,
-        ),
-        _UnifiedTasksList(
-          statusFilter: 'all',
-          user: user,
-          showOnlyAssigned: false,
-        ),
-      ];
-    } else if (isReviewer) {
-      // ✅ QC/Reviewer: Tab 1 = tasks pending his QC review, Tab 2 = all office tasks
-      tabs = [
-        const Tab(text: 'Pending QC'),
+        const Tab(text: 'My Tasks'),
         const Tab(text: 'All Tasks'),
       ];
       tabViews = [
-        _UnifiedTasksList(
-          statusFilter: 'qc_review',
-          user: user,
-          showOnlyAssigned: true,  // reviewerId == uid AND status == qc_review
-        ),
-        _UnifiedTasksList(
-          statusFilter: 'all',
-          user: user,
-          showOnlyAssigned: false, // all office tasks
-        ),
+        _MyTasksTrackerList(user: user),
+        _AllOfficeTasksList(user: user, statusFilter: _statusFilter),
+      ];
+    } else if (isReviewer) {
+      tabs = [
+        const Tab(text: 'My Tasks'),
+        const Tab(text: 'All Tasks'),
+      ];
+      tabViews = [
+        _MyTasksTrackerList(user: user),
+        _AllOfficeTasksList(user: user, statusFilter: _statusFilter),
+      ];
+    } else if (user?.isAdmin == true || user?.isManagement == true) {
+      tabs = [
+        const Tab(text: 'All Tasks'),
+        const Tab(text: 'Completed'),
+      ];
+      tabViews = [
+        _AllOfficeTasksList(user: user, statusFilter: _statusFilter),
+        _AllOfficeTasksList(user: user, statusFilter: 'completed'),
+      ];
+    } else if (user?.isDC == true) {
+      tabs = [
+        const Tab(text: 'My Tasks'),
+        const Tab(text: 'All Tasks'),
+      ];
+      tabViews = [
+        _MyTasksTrackerList(user: user),
+        _AllOfficeTasksList(user: user, statusFilter: _statusFilter),
       ];
     } else {
-      // Engineer / Management / DC / Admin
-      tabs = [const Tab(text: 'All Tasks'), const Tab(text: 'My Tasks')];
+      // Engineer — 2 tabs
+      tabs = [
+        const Tab(text: 'My Tasks'),
+        const Tab(text: 'All Tasks'),
+      ];
       tabViews = [
-        _UnifiedTasksList(
-          statusFilter: 'all',
-          user: user,
-          showOnlyAssigned: false,
-        ),
-        _UnifiedTasksList(
-          statusFilter: _statusFilter,
-          user: user,
-          showOnlyAssigned: true,
-        ),
+        _MyTasksTrackerList(user: user),
+        _AllOfficeTasksList(user: user, statusFilter: _statusFilter),
       ];
     }
 
@@ -130,13 +131,7 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen>
         ),
         bottom: hasTabs
             ? TabBar(controller: _tabController, tabs: tabs)
-            : PreferredSize(
-                preferredSize: const Size.fromHeight(48),
-                child: _FilterBar(
-                  selected: _statusFilter,
-                  onChanged: (v) => setState(() => _statusFilter = v),
-                ),
-              ),
+            : null,
       ),
       body: hasTabs
           ? TabBarView(controller: _tabController, children: tabViews)
@@ -316,9 +311,8 @@ class _MyTasksList extends ConsumerWidget {
   }
 
   _CardMode _cardMode(TaskModel task) {
-    if (task.status == 'not_started') return _CardMode.startTask;
-    if (task.status == 'in_progress') return _CardMode.submitToTeamLeader;
-    return _CardMode.viewOnly;
+    // ✅ FIX: delegate to centralized resolver so all role checks are consistent
+    return getTaskMode(task, user);
   }
 
   String _statusLabel(String status) {
@@ -417,9 +411,270 @@ class _QcReviewTasksList extends ConsumerWidget {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// _MyTasksTrackerList — "My Tasks" tab
+// Shows all tasks this user is directly involved in (any status except completed)
+// Each task shows the correct action button for this user's role & the task's
+// current status. When it's not this user's turn → viewOnly (no button).
+// ══════════════════════════════════════════════════════════════════════════════
+class _MyTasksTrackerList extends ConsumerWidget {
+  final dynamic user;
+  const _MyTasksTrackerList({required this.user});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tasksAsync = ref.watch(allVisibleTasksProvider);
+
+    return tasksAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Error: $e')),
+      data: (tasks) {
+        final uid = user?.uid ?? '';
+        final isEngineer = user?.isEngineer == true;
+        final isTeamLeader = user?.isTeamLeader == true;
+        final isReviewer = user?.isReviewer == true;
+        final isDC = user?.isDC == true;
+
+        // ── Filter logic per role ────────────────────────────────────────
+        // Engineer "My Tasks":  only tasks still in their court (not_started / in_progress)
+        //   Once submitted → moves to "All Tasks" tab for tracking
+        // TL "My Tasks":        tasks pending their review (team_leader_review)
+        //   + tasks in progress they need to watch (not_started / in_progress)
+        // QC "My Tasks":        tasks pending their review (qc_review)
+        //   + earlier stages they assigned as reviewer
+        // DC "My Tasks":        tasks at client_review stage (ready to dispatch)
+        // Client:               tasks at client_review (handled by allVisibleTasksProvider)
+        // Admin/Mgmt:           uses _AllOfficeTasksList — not this widget
+
+        List<TaskModel> active;
+
+        if (isEngineer) {
+          // Engineer only sees their own turn: not_started + in_progress
+          // Submitted tasks (team_leader_review / qc_review / client_review) → All Tasks tab
+          active = tasks
+              .where((t) =>
+                  (t.assignedEngineerIds as List<dynamic>? ?? []).contains(uid) &&
+                  (t.status == 'not_started' || t.status == 'in_progress'))
+              .toList()
+            ..sort((a, b) => a.endDate.compareTo(b.endDate));
+        } else if (isTeamLeader) {
+          // TL sees tasks pending their action (team_leader_review)
+          // + tasks still being worked on in their projects (so they can track)
+          active = tasks
+              .where((t) =>
+                  t.teamLeaderId == uid &&
+                  (t.status == 'not_started' ||
+                   t.status == 'in_progress' ||
+                   t.status == 'team_leader_review'))
+              .toList()
+            ..sort((a, b) => a.endDate.compareTo(b.endDate));
+        } else if (isReviewer) {
+          // QC sees tasks pending their review action
+          active = tasks
+              .where((t) =>
+                  t.reviewerId == uid &&
+                  t.status == 'qc_review')
+              .toList()
+            ..sort((a, b) => a.endDate.compareTo(b.endDate));
+        } else if (isDC) {
+          // DC sees tasks ready to dispatch to client
+          active = tasks
+              .where((t) => t.status == 'client_review')
+              .toList()
+            ..sort((a, b) => a.endDate.compareTo(b.endDate));
+        } else {
+          // Client / others — show all non-completed
+          active = tasks
+              .where((t) => t.status != 'completed')
+              .toList()
+            ..sort((a, b) => a.endDate.compareTo(b.endDate));
+        }
+
+        if (active.isEmpty) {
+          return const _EmptyState(
+            icon: Icons.task_outlined,
+            message: 'No active tasks',
+          );
+        }
+
+        // Group by discipline for readability
+        final byDiscipline = <String, List<TaskModel>>{};
+        for (final t in active) {
+          byDiscipline.putIfAbsent(t.discipline, () => []).add(t);
+        }
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: byDiscipline.entries.map((entry) {
+            return _DisciplineGroup(
+              discipline: entry.key,
+              tasks: entry.value,
+              user: user,
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// _AllOfficeTasksList — "All Tasks" tab
+// Admin / Management / TL / QC / DC can see all office tasks with status filter
+// viewOnly — no action buttons here
+// ══════════════════════════════════════════════════════════════════════════════
+class _AllOfficeTasksList extends ConsumerWidget {
+  final dynamic user;
+  final String statusFilter;
+  const _AllOfficeTasksList({required this.user, required this.statusFilter});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tasksAsync = ref.watch(allVisibleTasksProvider);
+
+    return tasksAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Error: $e')),
+      data: (tasks) {
+        final uid = user?.uid ?? '';
+        final isEngineer = user?.isEngineer == true;
+        final isTeamLeader = user?.isTeamLeader == true;
+        final isReviewer = user?.isReviewer == true;
+
+        List<TaskModel> filtered;
+
+        if (statusFilter == 'completed') {
+          filtered = tasks.where((t) => t.status == 'completed').toList();
+        } else if (isEngineer) {
+          // Engineer "All Tasks": all their assigned tasks (any active status)
+          // This is where they track submitted tasks (qc_review, client_review, etc.)
+          filtered = tasks
+              .where((t) =>
+                  (t.assignedEngineerIds as List<dynamic>? ?? []).contains(uid) &&
+                  t.status != 'completed')
+              .toList();
+        } else if (isTeamLeader) {
+          // TL "All Tasks": all tasks in their projects including advanced stages
+          filtered = tasks
+              .where((t) =>
+                  t.teamLeaderId == uid &&
+                  t.status != 'completed')
+              .toList();
+        } else if (isReviewer) {
+          // QC "All Tasks": all tasks assigned to them as reviewer (full tracking)
+          filtered = tasks
+              .where((t) =>
+                  t.reviewerId == uid &&
+                  t.status != 'completed')
+              .toList();
+        } else {
+          // Admin / Management / DC — see all office tasks
+          filtered = tasks.where((t) => t.status != 'completed').toList();
+        }
+
+        filtered.sort((a, b) => a.endDate.compareTo(b.endDate));
+
+        if (filtered.isEmpty) {
+          return const _EmptyState(
+            icon: Icons.task_outlined,
+            message: 'No tasks',
+          );
+        }
+
+        final byDiscipline = <String, List<TaskModel>>{};
+        for (final t in filtered) {
+          byDiscipline.putIfAbsent(t.discipline, () => []).add(t);
+        }
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: byDiscipline.entries.map((entry) {
+            return _DisciplineGroup(
+              discipline: entry.key,
+              tasks: entry.value,
+              user: user,
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+}
+
+// ── Discipline Group ─────────────────────────────────────────────────────────
+class _DisciplineGroup extends StatelessWidget {
+  final String discipline;
+  final List<TaskModel> tasks;
+  final dynamic user;
+
+  const _DisciplineGroup({
+    required this.discipline,
+    required this.tasks,
+    required this.user,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    discipline,
+                    style: TextStyle(
+                      color: cs.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${tasks.length} task${tasks.length > 1 ? "s" : ""}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurface.withOpacity(0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          ...tasks.map(
+            (task) => Consumer(
+              builder: (_, ref, _) => _TaskCard(
+                task: task,
+                user: user,
+                ref: ref,
+                mode: getTaskMode(task, user),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Card Mode Enum ────────────────────────────────────────────────────────────
 
-// 🔥 UNIFIED TASK LIST (Stage 2)
+// 🔥 UNIFIED TASK LIST (Stage 2) — kept for backward compatibility
 class _UnifiedTasksList extends ConsumerWidget {
   final bool showOnlyAssigned;
   final String statusFilter;
@@ -457,75 +712,47 @@ class _UnifiedTasksList extends ConsumerWidget {
         // TEAM LEADER
         // ══════════════════════════════════════════════════════════════════
         if (isTeamLeader) {
-          if (showOnlyAssigned) {
-            // Tab 1 "Pending Review" — tasks sent to him for approval
-            filtered = tasks
-                .where((t) =>
-                    t.teamLeaderId == uid &&
-                    t.status == 'team_leader_review')
-                .toList()
-              ..sort((a, b) => a.endDate.compareTo(b.endDate));
-          } else {
-            // Tab 2 "In Progress" — active tasks in his projects
-            filtered = tasks
-                .where((t) =>
-                    t.teamLeaderId == uid &&
-                    (t.status == 'not_started' ||
-                     t.status == 'in_progress'))
-                .toList()
-              ..sort((a, b) => a.endDate.compareTo(b.endDate));
-          }
+          // Team Leader tracks ALL tasks in their projects (any active status)
+          // getTaskMode() will show Approve/Reject button only on team_leader_review
+          filtered = tasks
+              .where((t) =>
+                  t.teamLeaderId == uid &&
+                  t.status != 'completed')
+              .toList()
+            ..sort((a, b) => a.endDate.compareTo(b.endDate));
 
         // ══════════════════════════════════════════════════════════════════
         // QC / REVIEWER
         // ══════════════════════════════════════════════════════════════════
         } else if (isReviewer) {
-          if (showOnlyAssigned) {
-            // Tab 1 "Pending QC" — tasks waiting for his QC review
-            filtered = tasks
-                .where((t) =>
-                    t.reviewerId == uid &&
-                    t.status == 'qc_review')
-                .toList()
-              ..sort((a, b) => a.endDate.compareTo(b.endDate));
-          } else {
-            // Tab 2 "All Tasks" — all office tasks (already from provider)
-            // Exclude completed to keep list manageable; apply status filter
-            if (statusFilter == 'all') {
-              filtered = tasks
-                  .where((t) => t.status != 'completed')
-                  .toList();
-            } else {
-              filtered = tasks
-                  .where((t) => t.status == statusFilter)
-                  .toList();
-            }
-          }
+          // Reviewer tracks all tasks assigned to them (any active status)
+          // getTaskMode() shows Approve/Reject only when status == qc_review
+          filtered = tasks
+              .where((t) =>
+                  t.reviewerId == uid &&
+                  t.status != 'completed')
+              .toList()
+            ..sort((a, b) => a.endDate.compareTo(b.endDate));
 
         // ══════════════════════════════════════════════════════════════════
         // DC
         // ══════════════════════════════════════════════════════════════════
         } else if (isDC) {
-          // DC always sees client_review tasks (for documentation & dispatch)
+          // DC tracks tasks from client_review onward + monitors all active tasks
+          // getTaskMode() always returns viewOnly for DC
           filtered = tasks
-              .where((t) => t.status == 'client_review')
+              .where((t) => t.status != 'completed')
               .toList();
 
         // ══════════════════════════════════════════════════════════════════
         // ENGINEER
         // ══════════════════════════════════════════════════════════════════
         } else if (isEngineer) {
-          // allVisibleTasksProvider already returns assignedEngineerIds tasks
-          // showOnlyAssigned has no extra meaning here — same data set
-          if (statusFilter == 'all') {
-            filtered = tasks
-                .where((t) => t.status != 'completed')
-                .toList();
-          } else {
-            filtered = tasks
-                .where((t) => t.status == statusFilter)
-                .toList();
-          }
+          // Engineer tracks all assigned tasks (any active status)
+          // getTaskMode() shows Start/Submit only when assigned + right status
+          filtered = tasks
+              .where((t) => t.status != 'completed')
+              .toList();
 
         // ══════════════════════════════════════════════════════════════════
         // ADMIN / MANAGEMENT — see all, filtered by status
@@ -639,28 +866,67 @@ class _UnifiedTasksList extends ConsumerWidget {
   }
 }
 
-// 🔥 Centralized Mode Resolver (FIX)
+// ══════════════════════════════════════════════════════════════════════════════
+// getTaskMode — Centralized action resolver
+//
+// Task Cycle: not_started → in_progress → team_leader_review → qc_review
+//             → client_review → completed (archived)
+//
+// PRINCIPLE: Every stakeholder SEES the task until completed.
+//            But only the role whose TURN it is gets action buttons.
+//
+//   Engineer     → startTask (not_started) or submitToTeamLeader (in_progress)
+//                  ONLY if uid is in assignedEngineerIds
+//   Team Leader  → teamLeaderReview (team_leader_review) — Approve → QC / Reject → Engineers
+//                  viewOnly on all other statuses (watches progress)
+//   QC/Reviewer  → qcReview (qc_review) — Approve → Client / Reject → TL
+//                  viewOnly on all other statuses
+//   Client       → clientReview (client_review) — Approve → completed / Reject → QC
+//                  viewOnly on all other statuses
+//   DC           → viewOnly always (tracks task flow, dispatches docs)
+//   Admin/Mgmt   → viewOnly always (oversight, no direct task actions)
+// ══════════════════════════════════════════════════════════════════════════════
 _CardMode getTaskMode(TaskModel task, dynamic user) {
   if (user == null) return _CardMode.viewOnly;
 
-  if (user.role == 'client' && task.status == 'client_review') {
-    return _CardMode.clientReview;
+  // ── Client ──────────────────────────────────────────────────────────────
+  if (user.isClient) {
+    if (task.status == 'client_review') return _CardMode.clientReview;
+    return _CardMode.viewOnly; // can track other statuses but no action
   }
 
-  if (user.canManageTasks && task.status == 'team_leader_review') {
-    return _CardMode.teamLeaderReview;
+  // ── Team Leader ─────────────────────────────────────────────────────────
+  // TL sees ALL tasks in their projects (allVisibleTasksProvider returns them).
+  // Action only when it's their turn: team_leader_review.
+  if (user.isTeamLeader) {
+    if (task.status == 'team_leader_review') return _CardMode.teamLeaderReview;
+    return _CardMode.viewOnly; // tracks in_progress, qc_review, client_review
   }
 
-  if (user.isReviewer && task.status == 'qc_review') {
-    return _CardMode.qcReview;
+  // ── QC / Reviewer ───────────────────────────────────────────────────────
+  // QC sees tasks assigned to them as reviewer.
+  // Action only when status == qc_review AND they are the designated reviewer.
+  if (user.isReviewer) {
+    if (task.status == 'qc_review' && task.reviewerId == user.uid) {
+      return _CardMode.qcReview;
+    }
+    return _CardMode.viewOnly;
   }
 
-  // Start Task + Submit: فقط للـ Engineer والـ Team Leader
-  // QC / DC / Management / Admin يشوفوا viewOnly
-  final canInteract = user.isEngineer || user.canManageTasks;
-  if (canInteract && task.status == 'not_started') return _CardMode.startTask;
-  if (canInteract && task.status == 'in_progress') return _CardMode.submitToTeamLeader;
+  // ── Engineer ────────────────────────────────────────────────────────────
+  // Engineer acts ONLY on tasks they are assigned to.
+  if (user.isEngineer) {
+    final assignedToMe = (task.assignedEngineerIds as List<dynamic>? ?? [])
+        .contains(user.uid);
+    if (!assignedToMe) return _CardMode.viewOnly;
+    if (task.status == 'not_started') return _CardMode.startTask;
+    if (task.status == 'in_progress') return _CardMode.submitToTeamLeader;
+    // Once submitted (team_leader_review / qc_review / client_review)
+    // engineer can still track their task — viewOnly
+    return _CardMode.viewOnly;
+  }
 
+  // ── DC / Admin / Management → always viewOnly ───────────────────────────
   return _CardMode.viewOnly;
 }
 
@@ -1167,27 +1433,61 @@ class _TaskCard extends StatelessWidget {
     BuildContext context, {
     required bool reject,
   }) async {
-    final newStatus = reject ? 'rejected' : 'approved';
-
-    try {
-      // TODO: استبدل دي بالـ repository عندك
-      await FirebaseFirestore.instance.collection('tasks').doc(task.id).update({
-        'status': newStatus,
-        'clientReviewedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            reject ? 'Task rejected by client' : 'Task approved by client',
-          ),
+    // ✅ FIX: use proper repository methods (old code wrote invalid status values)
+    final container = ProviderScope.containerOf(context);
+    final notes = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (_) => UncontrolledProviderScope(
+        container: container,
+        child: _TaskReviewSheet(
+          task: task,
+          title: reject ? 'Reject Task' : 'Approve Task',
+          confirmText: reject ? 'Reject' : 'Approve',
+          confirmColor: reject ? Colors.red : null,
+          notesHint: reject
+              ? 'Enter rejection notes...'
+              : 'Optional approval notes...',
         ),
-      );
+      ),
+    );
+
+    if (notes == null) return; // user cancelled
+
+    final userName = ref.read(currentUserProvider).value?.name ?? '';
+    try {
+      if (reject) {
+        await ref.read(taskRepositoryProvider).clientRejectToQc(
+              taskId: task.id,
+              notes: notes,
+              userName: userName,
+            );
+      } else {
+        await ref.read(taskRepositoryProvider).clientApproveTask(
+              taskId: task.id,
+              notes: notes,
+              userName: userName,
+            );
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              reject
+                  ? 'Task returned to QC ✓'
+                  : 'Task approved ✓',
+            ),
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 }

@@ -159,6 +159,7 @@ class NotificationRepository {
     final body =
         '"$taskTitle" → $statusLabel\nBy $changedByName · $projectName';
 
+    // ── إشعار عام لكل المعنيين ───────────────────────────────────────────────
     final allRecipients = <String>{
       ...engineerIds,
       if (teamLeaderId.isNotEmpty) teamLeaderId,
@@ -177,6 +178,38 @@ class NotificationRepository {
       taskId: taskId,
       taskTitle: taskTitle,
     );
+
+    // ── إشعار خاص لـ DC عند إرسال المهمة للعميل (client_review) ────────────
+    // DC يحتاج يعرف فورًا عشان يجهّز مستندات الإرسال
+    if (newStatus == 'client_review') {
+      final dcIds = await _fetchDCUsers(officeId);
+      if (dcIds.isNotEmpty) {
+        await sendToMany(
+          officeId: officeId,
+          recipientIds: dcIds,
+          title: '📤 Ready for Client Dispatch',
+          body:
+              '"$taskTitle" is ready to send to client.\n'
+              'Project: $projectName\nApproved by: $changedByName',
+          type: 'dc_dispatch_required',
+          projectId: projectId,
+          projectName: projectName,
+          taskId: taskId,
+          taskTitle: taskTitle,
+        );
+      }
+    }
+  }
+
+  // ── جلب DC users في المكتب ─────────────────────────────────────────────
+  Future<List<String>> _fetchDCUsers(String officeId) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .where('officeId', isEqualTo: officeId)
+        .where('role', isEqualTo: 'dc')
+        .where('isActive', isEqualTo: true)
+        .get();
+    return snap.docs.map((d) => d.id).toList();
   }
 
   // ── إشعار إسناد task جديدة ───────────────────────────────────────────────
