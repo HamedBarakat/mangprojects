@@ -1,3 +1,4 @@
+import '../../../../features/auth/presentation/controllers/auth_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/project_model.dart';
@@ -27,6 +28,9 @@ final singleProjectProvider = StreamProvider.family<ProjectModel?, String>((
   ref,
   projectId,
 ) {
+  // ✅ Use effectiveUidProvider — rebuilds automatically on auth state change
+  final uid = ref.watch(effectiveUidProvider);
+  if (uid == null) return const Stream.empty();
   return ref.watch(projectRepositoryProvider).watchSingleProject(projectId);
 });
 

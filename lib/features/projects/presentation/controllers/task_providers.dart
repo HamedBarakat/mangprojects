@@ -27,6 +27,12 @@ final projectTasksProvider = StreamProvider.family<List<TaskModel>, String>((
   ref,
   projectId,
 ) {
+  // ✅ CRITICAL FIX: Watch effectiveUidProvider — the same auth signal used
+  // by allVisibleTasksProvider. When uid=null (after logout) → empty stream.
+  // When uid returns (after login) → Riverpod rebuilds this provider automatically.
+  final uid = ref.watch(effectiveUidProvider);
+  if (uid == null) return const Stream.empty();
+
   return ref.watch(taskRepositoryProvider).watchProjectTasks(projectId);
 });
 
@@ -71,6 +77,9 @@ final singleTaskProvider = StreamProvider.family<TaskModel?, String>((
 
 final projectTaskStatsProvider =
     FutureProvider.family<Map<String, int>, String>((ref, projectId) async {
+      // ✅ Wait for valid auth via effectiveUidProvider
+      final uid = ref.watch(effectiveUidProvider);
+      if (uid == null) return {};
       return ref.watch(taskRepositoryProvider).getProjectTaskStats(projectId);
     });
 
