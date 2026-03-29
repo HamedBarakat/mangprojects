@@ -154,6 +154,7 @@ class NotificationRepository {
     required String teamLeaderId,
     required String reviewerId,
     required List<String> officeWideIds,
+    String clientId = '',   // ← clientId of the task (to notify client users)
   }) async {
     final statusLabel = _statusLabel(newStatus);
     final body =
@@ -198,6 +199,26 @@ class NotificationRepository {
           taskTitle: taskTitle,
         );
       }
+
+      // ── إشعار للـ Client users المرتبطين بهذا المشروع ──────────────────
+      if (clientId.isNotEmpty) {
+        final clientUserIds = await _fetchClientUsers(clientId, officeId);
+        if (clientUserIds.isNotEmpty) {
+          await sendToMany(
+            officeId: officeId,
+            recipientIds: clientUserIds,
+            title: '🔔 Task Ready for Your Review',
+            body:
+                '"$taskTitle" is awaiting your approval.\n'
+                'Project: $projectName',
+            type: 'client_review_required',
+            projectId: projectId,
+            projectName: projectName,
+            taskId: taskId,
+            taskTitle: taskTitle,
+          );
+        }
+      }
     }
   }
 
@@ -207,6 +228,19 @@ class NotificationRepository {
         .collection('users')
         .where('officeId', isEqualTo: officeId)
         .where('role', isEqualTo: 'dc')
+        .where('isActive', isEqualTo: true)
+        .get();
+    return snap.docs.map((d) => d.id).toList();
+  }
+
+  // ── جلب Client users المرتبطين بـ clientId معين ───────────────────────
+  Future<List<String>> _fetchClientUsers(
+      String clientId, String officeId) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .where('officeId', isEqualTo: officeId)
+        .where('role', isEqualTo: 'client')
+        .where('linkedClientId', isEqualTo: clientId)
         .where('isActive', isEqualTo: true)
         .get();
     return snap.docs.map((d) => d.id).toList();

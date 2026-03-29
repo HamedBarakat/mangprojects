@@ -63,6 +63,11 @@ class TaskModel {
   final int clientReviewRound;
   final DateTime? submittedToClientAt;
 
+  // ── DC (Document Controller) Dispatch ─────────────────────────────────────
+  // Set when DC confirms the task was officially sent to client
+  final DateTime? dcSentAt;
+  final String dcSentByName;
+
   // ── Client Comments History ────────────────────────────────────────────────
   final List<Map<String, dynamic>> clientComments;
   final List<Map<String, dynamic>> attachments;
@@ -105,6 +110,8 @@ class TaskModel {
     required this.clientReviewedAt,
     required this.clientReviewRound,
     required this.submittedToClientAt,
+    this.dcSentAt,
+    this.dcSentByName = '',
     required this.clientComments,
     required this.attachments,
     required this.activityLog,
@@ -188,6 +195,8 @@ class TaskModel {
       clientReviewedAt: (d['clientReviewedAt'] as Timestamp?)?.toDate(),
       clientReviewRound: d['clientReviewRound'] ?? 0,
       submittedToClientAt: (d['submittedToClientAt'] as Timestamp?)?.toDate(),
+      dcSentAt: (d['dcSentAt'] as Timestamp?)?.toDate(),
+      dcSentByName: d['dcSentByName'] ?? '',
       clientComments: List<Map<String, dynamic>>.from(
         (d['clientComments'] as List?)?.map(
               (e) => Map<String, dynamic>.from(e as Map),
@@ -253,6 +262,8 @@ class TaskModel {
       'submittedToClientAt': submittedToClientAt != null
           ? Timestamp.fromDate(submittedToClientAt!)
           : null,
+      'dcSentAt': dcSentAt != null ? Timestamp.fromDate(dcSentAt!) : null,
+      'dcSentByName': dcSentByName,
       'clientComments': clientComments,
       'createdBy': createdBy,
       'createdByName': createdByName,
@@ -292,6 +303,8 @@ class TaskModel {
     DateTime? clientReviewedAt,
     int? clientReviewRound,
     DateTime? submittedToClientAt,
+    DateTime? dcSentAt,
+    String? dcSentByName,
     List<Map<String, dynamic>>? clientComments,
     String? createdBy,
     String? createdByName,
@@ -333,6 +346,8 @@ class TaskModel {
       clientReviewedAt: clientReviewedAt ?? this.clientReviewedAt,
       clientReviewRound: clientReviewRound ?? this.clientReviewRound,
       submittedToClientAt: submittedToClientAt ?? this.submittedToClientAt,
+      dcSentAt: dcSentAt ?? this.dcSentAt,
+      dcSentByName: dcSentByName ?? this.dcSentByName,
       clientComments: clientComments ?? this.clientComments,
       createdBy: createdBy ?? this.createdBy,
       createdByName: createdByName ?? this.createdByName,

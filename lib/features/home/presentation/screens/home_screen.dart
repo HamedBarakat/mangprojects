@@ -21,6 +21,7 @@ import '../../../client/presentation/screens/client_screen.dart';
 import '../../../client/presentation/screens/clients_screen.dart';
 import 'package:mang_projects/features/office/presentation/controllers/office_settings_providers.dart';
 import '../../../projects/presentation/screens/my_tasks_screen.dart';
+import '../../../projects/presentation/screens/dc_tasks_screen.dart';
 import '../../../employees/presentation/screens/add_edit_employee_screen.dart';
 import '../../../employees/presentation/controllers/employee_providers.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
@@ -358,7 +359,7 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
     }
 
     if (user.isDC) {
-      if (index == 2) return const MyTasksScreen();
+      if (index == 2) return const DCTasksScreen();
       if (index == 3) return const AttendanceScreen();
       return const SettingsScreen();
     }

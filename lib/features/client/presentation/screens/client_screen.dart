@@ -20,6 +20,20 @@ final clientProjectsProvider =
           );
     });
 
+// ── Provider: count of client_review tasks per project ───────────────────────
+// Uses (clientId, projectId) tuple to satisfy Firestore rules for client role
+final clientPendingReviewCountProvider =
+    StreamProvider.family<int, (String, String)>((ref, args) {
+  final (clientId, projectId) = args;
+  return FirebaseFirestore.instance
+      .collection('tasks')
+      .where('clientId', isEqualTo: clientId)
+      .where('projectId', isEqualTo: projectId)
+      .where('status', isEqualTo: 'client_review')
+      .snapshots()
+      .map((snap) => snap.docs.length);
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // CLIENT SCREEN
 // ══════════════════════════════════════════════════════════════════════════════
@@ -219,7 +233,7 @@ class _Divider extends StatelessWidget {
 // PROJECT CARD
 // ══════════════════════════════════════════════════════════════════════════════
 
-class _ProjectCard extends StatelessWidget {
+class _ProjectCard extends ConsumerWidget {
   final Map<String, dynamic> project;
   final String clientId;
   final VoidCallback onTap;
@@ -230,7 +244,12 @@ class _ProjectCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projectId = project['id'] as String? ?? '';
+    final pendingCount = ref
+        .watch(clientPendingReviewCountProvider((clientId, projectId)))
+        .value ?? 0;
+    final hasPending = pendingCount > 0;
     final cs = Theme.of(context).colorScheme;
     final status = project['status'] as String? ?? 'active';
     final progress =
@@ -306,6 +325,38 @@ class _ProjectCard extends StatelessWidget {
                     ),
                   ),
                   _StatusBadge(status),
+                  if (hasPending) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.pending_actions_rounded,
+                            size: 11,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '$pendingCount',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -350,30 +401,59 @@ class _ProjectCard extends StatelessWidget {
             // Footer
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.calendar_today_outlined,
-                    size: 13,
-                    color: cs.onSurface.withOpacity(0.45),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today_outlined,
+                        size: 13,
+                        color: cs.onSurface.withOpacity(0.45),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'End: $endDate',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurface.withOpacity(0.55),
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        'View Details →',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurface.withOpacity(0.4),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'End: $endDate',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: cs.onSurface.withOpacity(0.55),
+                  if (hasPending) ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: onTap,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.rate_review_rounded, size: 16),
+                        label: Text(
+                          'Review Tasks ($pendingCount)',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'View Details →',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: cs.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  ],
                 ],
               ),
             ),

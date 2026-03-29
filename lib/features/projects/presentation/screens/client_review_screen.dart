@@ -124,7 +124,7 @@ class _AwaitingClientTab extends ConsumerWidget {
         .watch(projectTasksProvider(projectId))
         .maybeWhen(
           data: (allTasks) =>
-              allTasks.where((t) => t.status != 'completed').toList(),
+              allTasks.where((t) => t.status == 'client_review').toList(),
           orElse: () => [],
         );
 
@@ -401,15 +401,6 @@ class _ClientReviewCard extends ConsumerWidget {
               _PreviousCommentsWidget(comments: task.clientComments),
             ],
 
-            // ── Attachments ──────────────────────────────────────────
-            const SizedBox(height: 8),
-            TaskAttachmentsWidget(
-              taskId: task.id,
-              projectId: task.projectId,
-              officeId: task.officeId,
-              isReadOnly: task.status != 'client_review',
-            ),
-
             // ── Actions (Awaiting mode only) ──────────────────────────
             if (mode == _ReviewMode.awaitingClient &&
                 task.status == 'client_review') ...[
@@ -479,98 +470,306 @@ class _ClientReviewCard extends ConsumerWidget {
     WidgetRef ref, {
     required bool reject,
   }) {
-    final notesController = TextEditingController();
-    final userAsync = ref.read(currentUserProvider);
-    final userName = userAsync.value?.name ?? 'Admin';
+    final container = ProviderScope.containerOf(context);
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(reject ? 'Client Rejected' : 'Client Approved'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (reject)
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.07),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.info_outline, size: 16, color: Colors.red),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'The task will return to in_progress for revision.',
-                        style: TextStyle(fontSize: 12, color: Colors.red),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: notesController,
-              maxLines: 4,
-              decoration: InputDecoration(
-                hintText: reject
-                    ? 'Enter client comments / notes...'
-                    : 'Optional approval notes...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => UncontrolledProviderScope(
+        container: container,
+        child: _ClientFeedbackSheet(
+          task: task,
+          reject: reject,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: reject
-                ? FilledButton.styleFrom(backgroundColor: Colors.red)
-                : FilledButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () async {
-              Navigator.pop(context);
-              final repo = ref.read(taskRepositoryProvider);
-              if (reject) {
-                await repo.clientRejectToQc(
-                  taskId: task.id,
-                  notes: notesController.text.trim(),
-                  userName: 'Client',
-                );
-              } else {
-                await repo.clientApproveTask(
-                  taskId: task.id,
-                  notes: notesController.text.trim(),
-                  userName: 'Client',
-                );
-              }
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      reject
-                          ? 'Returned to team for revision ✓'
-                          : 'Task marked as client approved ✓',
-                    ),
-                  ),
-                );
-              }
-            },
-            child: Text(reject ? 'Confirm Rejection' : 'Confirm Approval'),
-          ),
-        ],
       ),
     );
   }
 
   String _fmtDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Client Feedback BottomSheet — with Attachments support
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _ClientFeedbackSheet extends ConsumerStatefulWidget {
+  final TaskModel task;
+  final bool reject;
+
+  const _ClientFeedbackSheet({required this.task, required this.reject});
+
+  @override
+  ConsumerState<_ClientFeedbackSheet> createState() =>
+      _ClientFeedbackSheetState();
+}
+
+class _ClientFeedbackSheetState extends ConsumerState<_ClientFeedbackSheet> {
+  late final TextEditingController _notesController;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _notesController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final reject = widget.reject;
+    final task = widget.task;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final actionColor = reject ? Colors.red : Colors.green;
+    final actionLabel = reject ? 'Confirm Rejection' : 'Confirm Approval';
+    final actionIcon =
+        reject ? Icons.cancel_outlined : Icons.check_circle_outline;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.88,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (_, scrollController) {
+            return Column(
+              children: [
+                // ── Handle ──────────────────────────────────────────
+                const SizedBox(height: 10),
+                Container(
+                  width: 42,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                // ── Header ──────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                  child: Row(
+                    children: [
+                      Icon(actionIcon, color: actionColor, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          reject ? 'Client Rejected' : 'Client Approved',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: actionColor,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+
+                // ── Scrollable body ──────────────────────────────────
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Task title
+                        Text(
+                          task.title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                        Text(
+                          task.projectName,
+                          style: TextStyle(
+                            color: cs.primary,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Reject warning
+                        if (reject) ...[
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.07),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.info_outline,
+                                    size: 16, color: Colors.red),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Task will return to QC for revision.',
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.red),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+
+                        // ── Attachments ──────────────────────────────
+                        Text(
+                          'Attachments',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: cs.primary,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TaskAttachmentsWidget(
+                          taskId: task.id,
+                          projectId: task.projectId,
+                          officeId: task.officeId,
+                          isReadOnly: false, // Client can upload attachments
+                        ),
+                        const SizedBox(height: 20),
+
+                        // ── Notes ────────────────────────────────────
+                        Text(
+                          reject ? 'Rejection Notes' : 'Approval Notes',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: cs.primary,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _notesController,
+                          maxLines: 4,
+                          decoration: InputDecoration(
+                            hintText: reject
+                                ? 'Enter rejection comments...'
+                                : 'Optional approval notes...',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ── Action buttons ───────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                  decoration: BoxDecoration(
+                    color: cs.surface,
+                    border: Border(
+                      top: BorderSide(
+                          color: cs.outlineVariant.withOpacity(0.4)),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                              backgroundColor: actionColor),
+                          onPressed: _submitting ? null : _submit,
+                          icon: _submitting
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Icon(actionIcon, size: 16),
+                          label: Text(actionLabel),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    setState(() => _submitting = true);
+    final userName =
+        ref.read(currentUserProvider).value?.name ?? 'Client';
+    final repo = ref.read(taskRepositoryProvider);
+    try {
+      debugPrint('[ClientFeedback] submitting reject=${widget.reject} taskId=${widget.task.id}');
+      if (widget.reject) {
+        await repo.clientRejectToQc(
+          taskId: widget.task.id,
+          notes: _notesController.text.trim(),
+          userName: userName,
+        );
+      } else {
+        await repo.clientApproveTask(
+          taskId: widget.task.id,
+          notes: _notesController.text.trim(),
+          userName: userName,
+        );
+      }
+      debugPrint('[ClientFeedback] SUCCESS');
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.reject
+                  ? 'Returned to QC for revision ✓'
+                  : 'Task approved ✓',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _submitting = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

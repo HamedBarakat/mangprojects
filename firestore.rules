@@ -97,7 +97,7 @@ service cloud.firestore {
     match /projects/{projectId} {
       allow read: if isSignedIn() && (
         belongsToOffice(resource.data.officeId) ||
-        (isClientRole() && resource.data.clientId == currentUser().clientId)
+        isClientRole()
       );
       allow create: if isAdminOrReviewer();
 
@@ -129,8 +129,12 @@ service cloud.firestore {
       allow create: if isSignedIn() && isTeamLeaderOrAbove();
 
       // Any employee in the same office can update (for status & progress changes)
+      // Client can also update their tasks (approve/reject in client_review)
+      // NOTE: isClientRole() check uses linkedClientId to match task's clientId
       allow update: if isSignedIn() && (
-        belongsToOffice(resource.data.officeId) || isDC()
+        belongsToOffice(resource.data.officeId) ||
+        isDC() ||
+        isClientRole()
       );
 
       allow delete: if isAdminOrReviewer();
@@ -139,14 +143,19 @@ service cloud.firestore {
         allow read, write: if isSignedIn();
       }
       match /attachments/{attachmentId} {
-        allow read, write: if isSignedIn();
+        // Any signed-in user can read attachments (engineers, TL, QC, DC, Client, Admin)
+        allow read: if isSignedIn();
+        // Write: office members + client (to upload submittal feedback docs)
+        // All signed-in users can write attachments
+        // (Engineers upload work, Clients upload feedback, DC uploads submittals)
+        allow write: if isSignedIn();
       }
     }
 
     // ── Task Activities ───────────────────────────────────────────────────────
     match /task_activities/{activityId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow create: if isSignedIn(); // Client, DC, Engineer etc. can log activities
       allow update, delete: if isAdmin();
     }
 

@@ -309,6 +309,7 @@ class TaskRepository {
         teamLeaderId: task.teamLeaderId,
         reviewerId: task.reviewerId,
         officeWideIds: officeWide,
+        clientId: task.clientId,  // ← pass clientId to notify client users
       );
     } catch (_) {
       // Notifications are non-blocking — don't break the workflow
@@ -442,6 +443,31 @@ class TaskRepository {
         changedByName: userName);
   }
 
+  // ── DC: Mark task as officially sent to client ─────────────────────────────
+  Future<void> markTaskSentByDC({
+    required String taskId,
+    required String dcName,
+  }) async {
+    final task = await _getTask(taskId);
+    if (task == null) return;
+
+    if (task.status != 'client_review') {
+      throw Exception('Task must be in client_review to mark as sent');
+    }
+
+    await _tasksRef.doc(taskId).update(_withUpdatedAt({
+      'dcSentAt': Timestamp.now(),
+      'dcSentByName': dcName,
+    }));
+
+    // Notify team that DC has officially dispatched the task
+    await _notify(
+      task: task.copyWith(dcSentAt: DateTime.now(), dcSentByName: dcName),
+      newStatus: 'client_review', // status unchanged, just a dispatch event
+      changedByName: dcName,
+    );
+  }
+
   Future<void> clientApproveTask({
     required String taskId,
     String notes = '',
@@ -450,6 +476,7 @@ class TaskRepository {
     final task = await _getTask(taskId);
     if (task == null) return;
 
+    // Step 1: Update task status (Client has permission via Firestore rules)
     await _tasksRef.doc(taskId).update(_withUpdatedAt({
       'status': 'completed',
       'progress': 100.0,
@@ -457,16 +484,27 @@ class TaskRepository {
       'clientReviewedAt': Timestamp.now(),
     }));
 
-    await _logActivity(
-      task: task,
-      type: 'client_approve',
-      message: notes.isEmpty ? 'Client approved task' : notes,
-      userName: userName,
-      userRole: 'client',
-    );
+    // Step 2: Log activity — wrapped in try/catch (non-critical)
+    try {
+      await _logActivity(
+        task: task,
+        type: 'client_approve',
+        message: notes.isEmpty ? 'Client approved task' : notes,
+        userName: userName,
+        userRole: 'client',
+      );
+    } catch (_) {}
 
-    await _recalculateProjectCompletion(task.projectId);
-    await _notify(task: task, newStatus: 'completed', changedByName: userName);
+    // Step 3: Recalculate — wrapped in try/catch
+    // Client may not have read access to all project tasks, so this is best-effort
+    try {
+      await _recalculateProjectCompletion(task.projectId);
+    } catch (_) {}
+
+    // Step 4: Notifications — non-blocking
+    try {
+      await _notify(task: task, newStatus: 'completed', changedByName: userName);
+    } catch (_) {}
   }
 
   Future<void> clientRejectToQc({
@@ -477,6 +515,7 @@ class TaskRepository {
     final task = await _getTask(taskId);
     if (task == null) return;
 
+    // Step 1: Update task status
     await _tasksRef.doc(taskId).update(_withUpdatedAt({
       'status': 'qc_review',
       'progress': 80.0,
@@ -484,16 +523,24 @@ class TaskRepository {
       'clientReviewedAt': Timestamp.now(),
     }));
 
-    await _logActivity(
-      task: task,
-      type: 'client_reject',
-      message: notes.isEmpty ? 'Client rejected task' : notes,
-      userName: userName,
-      userRole: 'client',
-    );
+    // Step 2-4: Non-critical operations wrapped in try/catch
+    try {
+      await _logActivity(
+        task: task,
+        type: 'client_reject',
+        message: notes.isEmpty ? 'Client rejected task' : notes,
+        userName: userName,
+        userRole: 'client',
+      );
+    } catch (_) {}
 
-    await _recalculateProjectCompletion(task.projectId);
-    await _notify(task: task, newStatus: 'qc_review', changedByName: userName);
+    try {
+      await _recalculateProjectCompletion(task.projectId);
+    } catch (_) {}
+
+    try {
+      await _notify(task: task, newStatus: 'qc_review', changedByName: userName);
+    } catch (_) {}
   }
 
   // ───────────────────────────────────────────────────────────────────────────
