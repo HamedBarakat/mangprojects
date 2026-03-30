@@ -153,7 +153,7 @@ class _ProjectsList extends ConsumerWidget {
                     _FilterChip(
                       label: 'All',
                       selected: statusFilter == 'all',
-                      color: AppColors.slate300,
+                      color: Theme.of(context).colorScheme.subtleText,
                       onTap: () => ref
                           .read(projectStatusFilterProvider.notifier)
                           .state = 'all',
@@ -169,7 +169,7 @@ class _ProjectsList extends ConsumerWidget {
                     _FilterChip(
                       label: 'Completed',
                       selected: statusFilter == 'completed',
-                      color: AppColors.cyan500,
+                      color: Theme.of(context).colorScheme.primary,
                       onTap: () => ref
                           .read(projectStatusFilterProvider.notifier)
                           .state = 'completed',
@@ -197,7 +197,7 @@ class _ProjectsList extends ConsumerWidget {
                         _FilterChip(
                           label: 'All Types',
                           selected: typeFilter == 'all',
-                          color: AppColors.slate300,
+                          color: Theme.of(context).colorScheme.subtleText,
                           onTap: () => ref
                               .read(projectTypeFilterProvider.notifier)
                               .state = 'all',
@@ -227,7 +227,7 @@ class _ProjectsList extends ConsumerWidget {
         Expanded(
           child: projectsAsync.when(
             loading: () => const Center(
-              child: CircularProgressIndicator(color: AppColors.cyan500),
+              child: CircularProgressIndicator(),
             ),
             error: (e, _) => Center(
               child: Text('Error: $e',
@@ -244,7 +244,7 @@ class _ProjectsList extends ConsumerWidget {
                         decoration: BoxDecoration(
                           color: AppColors.slate800,
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.slate700),
+                          border: Border.all(color: Theme.of(context).colorScheme.border),
                         ),
                         child: const Icon(Icons.business_center_outlined,
                             size: 44, color: AppColors.slate500),
@@ -254,15 +254,15 @@ class _ProjectsList extends ConsumerWidget {
                         showOnlyMine
                             ? 'No projects assigned to you'
                             : 'No projects found',
-                        style: const TextStyle(
-                            color: AppColors.slate400,
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.subtleText,
                             fontSize: 15,
                             fontWeight: FontWeight.w500),
                       ),
                       const SizedBox(height: 6),
-                      const Text('Try adjusting your filters',
+                       Text('Try adjusting your filters',
                           style: TextStyle(
-                              color: AppColors.slate500, fontSize: 12)),
+                              color: Theme.of(context).colorScheme.subtleText, fontSize: 12)),
                     ],
                   ),
                 );

@@ -115,7 +115,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
         Container(height: 1, color: AppColors.slate700),
         Expanded(
           child: clientsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator(color: AppColors.cyan500)),
+            loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
             data: (clients) {
               final filtered = clients
@@ -176,7 +176,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
         Container(height: 1, color: AppColors.slate700),
         Expanded(
           child: employeesAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator(color: AppColors.cyan500)),
+            loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
             data: (employees) {
               final clientAccounts = employees
@@ -290,7 +290,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
                           child: Center(
                             child: Text(
                               client.name.isNotEmpty ? client.name[0].toUpperCase() : '?',
-                              style: const TextStyle(color: AppColors.cyan500, fontWeight: FontWeight.bold, fontSize: 16),
+                              style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                           ),
                         ),
@@ -344,7 +344,7 @@ class _ClientCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.slate800,
+          color: Theme.of(context).colorScheme.cardBg,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: isActive ? AppColors.slate700 : AppColors.slate700.withOpacity(0.4)),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6, offset: const Offset(0, 2))],
@@ -424,7 +424,7 @@ class _ClientCard extends StatelessWidget {
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert_rounded, color: AppColors.slate500),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              color: AppColors.slate700,
+              color: Theme.of(context).colorScheme.border,
               onSelected: (val) {
                 if (val == 'edit') onEdit();
                 if (val == 'toggle') onToggleActive();
@@ -472,9 +472,9 @@ class _ClientAccountCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.slate800,
+          color: Theme.of(context).colorScheme.cardBg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.slate700),
+          border: Border.all(color: Theme.of(context).colorScheme.border),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6, offset: const Offset(0, 2))],
         ),
         child: Row(
@@ -484,7 +484,7 @@ class _ClientAccountCard extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: AppColors.slate700,
+                color: Theme.of(context).colorScheme.border,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
@@ -542,7 +542,7 @@ class _ClientAccountCard extends StatelessWidget {
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert_rounded, color: AppColors.slate500),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              color: AppColors.slate700,
+              color: Theme.of(context).colorScheme.border,
               onSelected: (val) {
                 if (val == 'edit') onEdit();
                 if (val == 'toggle') onToggleActive();
@@ -576,16 +576,16 @@ class _MiniChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.slate700,
+        color: Theme.of(context).colorScheme.border,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.slate600),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 12, color: AppColors.cyan500),
           const SizedBox(width: 5),
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.slate300, fontWeight: FontWeight.w500)),
+          Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.subtleText, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -885,7 +885,7 @@ class _EmptyState extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.slate800,
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.slate700),
+              border: Border.all(color: Theme.of(context).colorScheme.border),
             ),
             child: Icon(icon, size: 40, color: AppColors.slate500),
           ),
@@ -913,7 +913,7 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(width: 3, height: 16, decoration: BoxDecoration(color: AppColors.cyan500, borderRadius: BorderRadius.circular(2))),
+        Container(width: 3, height: 16, decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(2))),
         const SizedBox(width: 8),
         Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.cyan400)),
       ],

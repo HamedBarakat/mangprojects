@@ -29,8 +29,8 @@ class NotificationsScreen extends ConsumerWidget {
             data: (notifs) => notifs.any((n) => !n.isRead)
                 ? TextButton.icon(
                     icon: const Icon(Icons.done_all_rounded, size: 16, color: AppColors.cyan400),
-                    label: const Text('Mark all read',
-                        style: TextStyle(color: AppColors.cyan400, fontSize: 13)),
+                    label:  Text('Mark all read',
+                        style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13)),
                     onPressed: () async {
                       final user = ref.read(currentUserProvider).value;
                       if (user != null) await repo.markAllAsRead(user.uid);
@@ -42,8 +42,8 @@ class NotificationsScreen extends ConsumerWidget {
         ],
       ),
       body: notificationsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.cyan500)),
-        error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e', style: TextStyle(color: AppColors.error))),
         data: (notifications) {
           if (notifications.isEmpty) {
             return Center(
@@ -55,23 +55,23 @@ class NotificationsScreen extends ConsumerWidget {
                     decoration: BoxDecoration(
                       color: AppColors.slate800,
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.slate700),
+                      border: Border.all(color: Theme.of(context).colorScheme.border),
                     ),
-                    child: const Icon(
+                    child:  Icon(
                       Icons.notifications_none_rounded,
                       size: 44,
-                      color: AppColors.slate500,
+                      color: Theme.of(context).colorScheme.subtleText,
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                   Text(
                     'No notifications yet',
-                    style: TextStyle(color: AppColors.slate300, fontSize: 15, fontWeight: FontWeight.w500),
+                    style: TextStyle(color: Theme.of(context).colorScheme.subtleText, fontSize: 15, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
+                   Text(
                     'You\'re all caught up!',
-                    style: TextStyle(color: AppColors.slate500, fontSize: 12),
+                    style: TextStyle(color: Theme.of(context).colorScheme.subtleText, fontSize: 12),
                   ),
                 ],
               ),
@@ -136,12 +136,12 @@ class NotificationsScreen extends ConsumerWidget {
                               const SizedBox(height: 4),
                               Text(
                                 n.body,
-                                style: const TextStyle(color: AppColors.slate400, fontSize: 12),
+                                style: TextStyle(color: Theme.of(context).colorScheme.subtleText, fontSize: 12),
                               ),
                               const SizedBox(height: 6),
                               Text(
                                 _timeAgo(n.createdAt),
-                                style: const TextStyle(color: AppColors.slate500, fontSize: 11),
+                                style: TextStyle(color: Theme.of(context).colorScheme.subtleText, fontSize: 11),
                               ),
                             ],
                           ),
@@ -151,8 +151,8 @@ class NotificationsScreen extends ConsumerWidget {
                             width: 8,
                             height: 8,
                             margin: const EdgeInsets.only(top: 4),
-                            decoration: const BoxDecoration(
-                              color: AppColors.cyan500,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary,
                               shape: BoxShape.circle,
                             ),
                           ),

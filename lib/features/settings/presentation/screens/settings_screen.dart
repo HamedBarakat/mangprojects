@@ -15,6 +15,7 @@ import '../../../../features/office/data/models/office_model.dart';
 import '../../../../features/office/data/models/office_settings_model.dart';
 import '../../../office/presentation/screens/office_lists_screen.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/providers/theme_provider.dart';
 
 // ── Office stream provider ────────────────────────────────────────────────────
 final officeStreamProvider = StreamProvider<OfficeModel?>((ref) {
@@ -57,6 +58,10 @@ class SettingsScreen extends ConsumerWidget {
           children: [
             // ── Profile Card ────────────────────────────────────────────────
             _ProfileCard(user: user),
+            const SizedBox(height: 28),
+
+            // ── Appearance ──────────────────────────────────────────────────
+            const _AppearanceSection(),
             const SizedBox(height: 28),
 
             // ── Office Settings (Admin only) ────────────────────────────────
@@ -580,7 +585,7 @@ class _ProfileCard extends ConsumerWidget {
 
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: AppDecorations.heroBanner(),
+      decoration: AppDecorations.heroBannerOf(context),
       child: Row(
         children: [
           Container(
@@ -672,7 +677,7 @@ class _WorkHoursCardState extends ConsumerState<_WorkHoursCard> {
 
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: AppDecorations.card(),
+      decoration: AppDecorations.cardOf(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -897,9 +902,9 @@ class _SettingsTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: AppColors.slate800,
+          color: Theme.of(context).colorScheme.cardBg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.slate700),
+          border: Border.all(color: Theme.of(context).colorScheme.border),
         ),
         child: Row(
           children: [
@@ -916,7 +921,7 @@ class _SettingsTile extends StatelessWidget {
               child: Text(
                 label,
                 style: TextStyle(
-                  color: labelColor ?? AppColors.slate200,
+                  color: labelColor ?? Theme.of(context).colorScheme.onSurface,
                   fontWeight: FontWeight.w500,
                   fontSize: 14,
                 ),
@@ -924,7 +929,7 @@ class _SettingsTile extends StatelessWidget {
             ),
             if (trailing != null) trailing!,
             if (onTap != null && trailing == null)
-              const Icon(Icons.chevron_right_rounded, color: AppColors.slate600, size: 20),
+              Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.subtleText, size: 20),
           ],
         ),
       ),
@@ -1095,6 +1100,202 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
           child: _isLoading
               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : const Text('Change'),
+        ),
+      ],
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// APPEARANCE SECTION
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _AppearanceSection extends ConsumerWidget {
+  const _AppearanceSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final config = ref.watch(appThemeProvider);
+    final isDark = config.effective.brightness == Brightness.dark;
+    final isWhite = config.variant == AppThemeVariant.white;
+    final cs = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Section Header ───────────────────────────────────────────────────
+        Row(
+          children: [
+            Container(
+              width: 3, height: 16,
+              decoration: BoxDecoration(
+                color: cs.primary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text('Appearance', style: TextStyle(
+              color: cs.onSurface, fontWeight: FontWeight.bold, fontSize: 15,
+            )),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        // ── Dark / Light Toggle ──────────────────────────────────────────────
+        Opacity(
+          opacity: isWhite ? 0.4 : 1.0,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: cs.cardBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cs.border),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(
+                    isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                    color: cs.primary, size: 18,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isDark ? 'Dark Mode' : 'Light Mode',
+                        style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                      Text(
+                        isWhite ? 'White theme is always light' :
+                            (isDark ? 'Switch to light theme' : 'Switch to dark theme'),
+                        style: TextStyle(color: cs.subtleText, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: isDark,
+                  onChanged: isWhite ? null : (_) =>
+                      ref.read(appThemeProvider.notifier).toggleBrightness(),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Color Theme Grid ─────────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cs.cardBg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: cs.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Color Theme',
+                style: TextStyle(
+                  color: cs.subtleText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 2.4,
+                children: kAppThemes.map((info) {
+                  final isSelected = config.variant == info.variant;
+                  final previewBg = isDark ? info.previewBgDark : info.previewBgLight;
+
+                  return GestureDetector(
+                    onTap: () => ref.read(appThemeProvider.notifier).setVariant(info.variant),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: previewBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? info.previewAccent
+                              : info.previewAccent.withValues(alpha: 0.2),
+                          width: isSelected ? 2.5 : 1,
+                        ),
+                        boxShadow: isSelected
+                            ? [BoxShadow(
+                                color: info.previewAccent.withValues(alpha: 0.3),
+                                blurRadius: 10, spreadRadius: 1,
+                              )]
+                            : null,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 28, height: 28,
+                            decoration: BoxDecoration(
+                              color: info.previewAccent,
+                              shape: BoxShape.circle,
+                              boxShadow: [BoxShadow(
+                                color: info.previewAccent.withValues(alpha: 0.5),
+                                blurRadius: 6, spreadRadius: 1,
+                              )],
+                            ),
+                            child: isSelected
+                                ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
+                                : null,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  info.nameAr,
+                                  style: TextStyle(
+                                    color: info.previewBgLight == info.previewBgDark
+                                        ? Colors.black87  // white theme
+                                        : (isDark ? Colors.white.withValues(alpha:0.9) : Colors.black87),
+                                    fontSize: 13,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  info.nameEn,
+                                  style: TextStyle(
+                                    color: info.previewAccent.withValues(alpha: 0.8),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
         ),
       ],
     );

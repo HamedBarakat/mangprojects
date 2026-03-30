@@ -27,6 +27,7 @@ import '../../../employees/presentation/controllers/employee_providers.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../notifications/presentation/controllers/notification_providers.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/providers/theme_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -37,20 +38,15 @@ class HomeScreen extends ConsumerWidget {
 
     return userAsync.when(
       loading: () => const Scaffold(
-        backgroundColor: AppColors.slate900,
-        body: Center(
-          child: CircularProgressIndicator(color: AppColors.cyan500),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       ),
       error: (_, _) => const Scaffold(
-        backgroundColor: AppColors.slate900,
         body: Center(child: Text('Error loading user data')),
       ),
       data: (UserModel? user) {
         if (user == null) {
           return const Scaffold(
-            backgroundColor: AppColors.slate900,
-            body: Center(child: CircularProgressIndicator(color: AppColors.cyan500)),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
         return _HomeScaffold(user: user);
@@ -87,10 +83,9 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
     final user = widget.user;
     final navItems = _getNavItems(user);
 
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.slate900,
       appBar: AppBar(
-        backgroundColor: AppColors.slate850,
         elevation: 0,
         title: Row(
           children: [
@@ -99,8 +94,8 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
               width: 6,
               height: 6,
               margin: const EdgeInsets.only(right: 10),
-              decoration: const BoxDecoration(
-                color: AppColors.cyan500,
+              decoration: BoxDecoration(
+                color: cs.primary,
                 shape: BoxShape.circle,
               ),
             ),
@@ -109,16 +104,16 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
               children: [
                 Text(
                   _getGreeting(),
-                  style: const TextStyle(
-                    color: AppColors.slate400,
+                  style: TextStyle(
+                    color: cs.subtleText,
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
                   ),
                 ),
                 Text(
                   user.name,
-                  style: const TextStyle(
-                    color: AppColors.slate100,
+                  style: TextStyle(
+                    color: cs.headText,
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
                   ),
@@ -152,7 +147,7 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
             _HomeNotificationBell(),
           IconButton(
             icon: const Icon(Icons.logout_rounded, size: 20),
-            color: AppColors.slate400,
+            color: cs.subtleText,
             tooltip: 'Logout',
             onPressed: () async {
               await _performLogout(ref);
@@ -161,13 +156,13 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: AppColors.slate700),
+          child: Container(height: 1, color: cs.border),
         ),
       ),
       body: _getBody(user, _selectedIndex),
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.slate700, width: 1)),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: cs.border, width: 1)),
         ),
         child: NavigationBar(
           selectedIndex: _selectedIndex,
@@ -541,14 +536,14 @@ class _DashboardTab extends ConsumerWidget {
                     context,
                     MaterialPageRoute(builder: (_) => const ProjectsScreen()),
                   ),
-                  child: const Text('View all', style: TextStyle(color: AppColors.cyan400, fontSize: 12)),
+                  child: Text('View all', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 12)),
                 ),
             ],
           ),
           const SizedBox(height: 12),
 
           if (projectsAsync.isLoading)
-            const Center(child: CircularProgressIndicator(color: AppColors.cyan500))
+            const Center(child: CircularProgressIndicator())
           else if (recentProjects.isEmpty)
             Container(
               width: double.infinity,
@@ -559,19 +554,19 @@ class _DashboardTab extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.slate700,
+                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.business_center_outlined,
                       size: 36,
-                      color: AppColors.slate500,
+                      color: Theme.of(context).colorScheme.subtleText,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'No projects yet',
-                    style: TextStyle(color: AppColors.slate400, fontSize: 14),
+                    style: TextStyle(color: Theme.of(context).colorScheme.subtleText, fontSize: 14),
                   ),
                   if (user.isAdmin) ...[
                     const SizedBox(height: 16),
@@ -655,7 +650,7 @@ class _OfficeCard extends ConsumerWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
-      decoration: AppDecorations.heroBanner(),
+      decoration: AppDecorations.heroBannerOf(context),
       child: Row(
         children: [
           Container(
@@ -694,9 +689,9 @@ class _OfficeCard extends ConsumerWidget {
             width: 8,
             height: 8,
             decoration: BoxDecoration(
-              color: AppColors.cyan400,
+              color: Theme.of(context).colorScheme.primaryContainer,
               shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: AppColors.cyan400, blurRadius: 8, spreadRadius: 2)],
+              boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.primary, blurRadius: 8, spreadRadius: 2)],
             ),
           ),
         ],
@@ -719,15 +714,15 @@ class _SectionHeader extends StatelessWidget {
           width: 3,
           height: 16,
           decoration: BoxDecoration(
-            color: AppColors.cyan500,
+            color: Theme.of(context).colorScheme.primary,
             borderRadius: BorderRadius.circular(2),
           ),
         ),
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(
-            color: AppColors.slate100,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.bold,
             fontSize: 15,
           ),
@@ -757,11 +752,11 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.slate800,
+        color: Theme.of(context).colorScheme.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.slate700),
+        border: Border.all(color: Theme.of(context).colorScheme.border),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withValues(alpha:0.12), blurRadius: 8, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -788,7 +783,7 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(color: AppColors.slate400, fontSize: 11),
+            style: TextStyle(color: Theme.of(context).colorScheme.subtleText, fontSize: 11),
           ),
         ],
       ),
@@ -868,7 +863,7 @@ class _HomeNotificationBell extends ConsumerWidget {
         children: [
           Icon(
             count > 0 ? Icons.notifications_rounded : Icons.notifications_none_rounded,
-            color: count > 0 ? AppColors.cyan400 : AppColors.slate400,
+            color: count > 0 ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.subtleText,
             size: 22,
           ),
           if (count > 0)

@@ -36,7 +36,9 @@ class EmployeesScreen extends ConsumerWidget {
               ),
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const AddEditEmployeeScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const AddEditEmployeeScreen(),
+                ),
               ),
             ),
           ),
@@ -55,14 +57,38 @@ class EmployeesScreen extends ConsumerWidget {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _FilterChip(label: 'All', selected: statusFilter == 'all', color: AppColors.slate300,
-                          onTap: () => ref.read(employeeFilterProvider.notifier).state = 'all'),
-                      _FilterChip(label: 'Active', selected: statusFilter == 'active', color: AppColors.success,
-                          onTap: () => ref.read(employeeFilterProvider.notifier).state = 'active'),
-                      _FilterChip(label: 'Suspended', selected: statusFilter == 'suspended', color: AppColors.warning,
-                          onTap: () => ref.read(employeeFilterProvider.notifier).state = 'suspended'),
-                      _FilterChip(label: 'Resigned', selected: statusFilter == 'resigned', color: AppColors.error,
-                          onTap: () => ref.read(employeeFilterProvider.notifier).state = 'resigned'),
+                      _FilterChip(
+                        label: 'All',
+                        selected: statusFilter == 'all',
+                        color: Theme.of(context).colorScheme.subtleText,
+                        onTap: () =>
+                            ref.read(employeeFilterProvider.notifier).state =
+                                'all',
+                      ),
+                      _FilterChip(
+                        label: 'Active',
+                        selected: statusFilter == 'active',
+                        color: AppColors.success,
+                        onTap: () =>
+                            ref.read(employeeFilterProvider.notifier).state =
+                                'active',
+                      ),
+                      _FilterChip(
+                        label: 'Suspended',
+                        selected: statusFilter == 'suspended',
+                        color: AppColors.warning,
+                        onTap: () =>
+                            ref.read(employeeFilterProvider.notifier).state =
+                                'suspended',
+                      ),
+                      _FilterChip(
+                        label: 'Resigned',
+                        selected: statusFilter == 'resigned',
+                        color: AppColors.error,
+                        onTap: () =>
+                            ref.read(employeeFilterProvider.notifier).state =
+                                'resigned',
+                      ),
                     ],
                   ),
                 ),
@@ -72,18 +98,78 @@ class EmployeesScreen extends ConsumerWidget {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _FilterChip(label: 'All Depts', selected: deptFilter == 'all', color: AppColors.slate300,
-                          onTap: () => ref.read(employeeDepartmentFilterProvider.notifier).state = 'all'),
-                      _FilterChip(label: 'Electrical', selected: deptFilter == 'electrical', color: AppColors.warning,
-                          onTap: () => ref.read(employeeDepartmentFilterProvider.notifier).state = 'electrical'),
-                      _FilterChip(label: 'Mechanical', selected: deptFilter == 'mechanical', color: AppColors.info,
-                          onTap: () => ref.read(employeeDepartmentFilterProvider.notifier).state = 'mechanical'),
-                      _FilterChip(label: 'Civil', selected: deptFilter == 'civil', color: const Color(0xFFA0785A),
-                          onTap: () => ref.read(employeeDepartmentFilterProvider.notifier).state = 'civil'),
-                      _FilterChip(label: 'Architecture', selected: deptFilter == 'architecture', color: Colors.purple,
-                          onTap: () => ref.read(employeeDepartmentFilterProvider.notifier).state = 'architecture'),
-                      _FilterChip(label: 'Management', selected: deptFilter == 'management', color: AppColors.cyan600,
-                          onTap: () => ref.read(employeeDepartmentFilterProvider.notifier).state = 'management'),
+                      _FilterChip(
+                        label: 'All Depts',
+                        selected: deptFilter == 'all',
+                        color: Theme.of(context).colorScheme.subtleText,
+                        onTap: () =>
+                            ref
+                                    .read(
+                                      employeeDepartmentFilterProvider.notifier,
+                                    )
+                                    .state =
+                                'all',
+                      ),
+                      _FilterChip(
+                        label: 'Electrical',
+                        selected: deptFilter == 'electrical',
+                        color: AppColors.warning,
+                        onTap: () =>
+                            ref
+                                    .read(
+                                      employeeDepartmentFilterProvider.notifier,
+                                    )
+                                    .state =
+                                'electrical',
+                      ),
+                      _FilterChip(
+                        label: 'Mechanical',
+                        selected: deptFilter == 'mechanical',
+                        color: AppColors.info,
+                        onTap: () =>
+                            ref
+                                    .read(
+                                      employeeDepartmentFilterProvider.notifier,
+                                    )
+                                    .state =
+                                'mechanical',
+                      ),
+                      _FilterChip(
+                        label: 'Civil',
+                        selected: deptFilter == 'civil',
+                        color: const Color(0xFFA0785A),
+                        onTap: () =>
+                            ref
+                                    .read(
+                                      employeeDepartmentFilterProvider.notifier,
+                                    )
+                                    .state =
+                                'civil',
+                      ),
+                      _FilterChip(
+                        label: 'Architecture',
+                        selected: deptFilter == 'architecture',
+                        color: Colors.purple,
+                        onTap: () =>
+                            ref
+                                    .read(
+                                      employeeDepartmentFilterProvider.notifier,
+                                    )
+                                    .state =
+                                'architecture',
+                      ),
+                      _FilterChip(
+                        label: 'Management',
+                        selected: deptFilter == 'management',
+                        color: AppColors.cyan600,
+                        onTap: () =>
+                            ref
+                                    .read(
+                                      employeeDepartmentFilterProvider.notifier,
+                                    )
+                                    .state =
+                                'management',
+                      ),
                     ],
                   ),
                 ),
@@ -96,8 +182,13 @@ class EmployeesScreen extends ConsumerWidget {
           // ── List ───────────────────────────────────────────────────────
           Expanded(
             child: employeesAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator(color: AppColors.cyan500)),
-              error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(
+                child: Text(
+                  'Error: $e',
+                  style: TextStyle(color: AppColors.error),
+                ),
+              ),
               data: (_) {
                 if (employees.isEmpty) {
                   return Center(
@@ -109,16 +200,33 @@ class EmployeesScreen extends ConsumerWidget {
                           decoration: BoxDecoration(
                             color: AppColors.slate800,
                             shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.slate700),
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.border,
+                            ),
                           ),
-                          child: const Icon(Icons.people_outline_rounded, size: 44, color: AppColors.slate500),
+                          child: const Icon(
+                            Icons.people_outline_rounded,
+                            size: 44,
+                            color: AppColors.slate500,
+                          ),
                         ),
                         const SizedBox(height: 16),
-                        const Text('No employees found',
-                            style: TextStyle(color: AppColors.slate400, fontSize: 15, fontWeight: FontWeight.w500)),
+                        Text(
+                          'No employees found',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.subtleText,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                         const SizedBox(height: 6),
-                        const Text('Try adjusting your filters',
-                            style: TextStyle(color: AppColors.slate500, fontSize: 12)),
+                        Text(
+                          'Try adjusting your filters',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.subtleText,
+                            fontSize: 12,
+                          ),
+                        ),
                       ],
                     ),
                   );
@@ -134,7 +242,10 @@ class EmployeesScreen extends ConsumerWidget {
                         employee: emp,
                         onTap: () => Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => AddEditEmployeeScreen(employee: emp)),
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                AddEditEmployeeScreen(employee: emp),
+                          ),
                         ),
                       ),
                     );
@@ -153,7 +264,10 @@ class EmployeesScreen extends ConsumerWidget {
         backgroundColor: AppColors.cyan500,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.person_add_rounded),
-        label: const Text('Add Employee', style: TextStyle(fontWeight: FontWeight.bold)),
+        label: const Text(
+          'Add Employee',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
