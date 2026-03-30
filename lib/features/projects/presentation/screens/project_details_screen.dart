@@ -56,7 +56,7 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen>
     final cs = Theme.of(context).colorScheme;
     final user = ref.watch(currentUserProvider).value;
     final isAdmin = user?.isAdmin ?? false;
-    final isTeamLeader = user?.canManageTasks == true;
+    final isTeamLeader = user?.isTeamLeader == true; // FIX: canManageTasks includes Admin — use isTeamLeader
     final canAddTask = isAdmin || isTeamLeader;
 
     final projectAsync = ref.watch(singleProjectProvider(widget.project.id));

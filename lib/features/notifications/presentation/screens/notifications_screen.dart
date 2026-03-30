@@ -29,7 +29,7 @@ class NotificationsScreen extends ConsumerWidget {
             data: (notifs) => notifs.any((n) => !n.isRead)
                 ? TextButton.icon(
                     icon: const Icon(Icons.done_all_rounded, size: 16, color: AppColors.cyan400),
-                    label:  Text('Mark all read',
+                    label: Text('Mark all read',
                         style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13)),
                     onPressed: () async {
                       final user = ref.read(currentUserProvider).value;
@@ -57,19 +57,19 @@ class NotificationsScreen extends ConsumerWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: Theme.of(context).colorScheme.border),
                     ),
-                    child:  Icon(
+                    child: Icon(
                       Icons.notifications_none_rounded,
                       size: 44,
                       color: Theme.of(context).colorScheme.subtleText,
                     ),
                   ),
                   const SizedBox(height: 16),
-                   Text(
+                  Text(
                     'No notifications yet',
                     style: TextStyle(color: Theme.of(context).colorScheme.subtleText, fontSize: 15, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 6),
-                   Text(
+                  Text(
                     'You\'re all caught up!',
                     style: TextStyle(color: Theme.of(context).colorScheme.subtleText, fontSize: 12),
                   ),

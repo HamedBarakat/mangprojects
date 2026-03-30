@@ -460,12 +460,23 @@ class TaskRepository {
       'dcSentByName': dcName,
     }));
 
-    // Notify team that DC has officially dispatched the task
-    await _notify(
-      task: task.copyWith(dcSentAt: DateTime.now(), dcSentByName: dcName),
-      newStatus: 'client_review', // status unchanged, just a dispatch event
-      changedByName: dcName,
-    );
+    // FIX: Use dedicated dc_dispatched notification — avoids triggering
+    // the DC dispatch_required notification again (infinite loop)
+    try {
+      final officeWide = await _notifRepo.fetchOfficeWideStakeholders(task.officeId);
+      await _notifRepo.sendDCDispatchedNotification(
+        officeId: task.officeId,
+        taskId: task.id,
+        taskTitle: task.title,
+        projectId: task.projectId,
+        projectName: task.projectName,
+        dcName: dcName,
+        engineerIds: task.assignedEngineerIds,
+        teamLeaderId: task.teamLeaderId,
+        reviewerId: task.reviewerId,
+        officeWideIds: officeWide,
+      );
+    } catch (_) {}
   }
 
   Future<void> clientApproveTask({

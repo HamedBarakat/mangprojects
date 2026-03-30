@@ -9,6 +9,7 @@ import '../../../projects/data/models/task_model.dart';
 import '../../../projects/presentation/controllers/task_providers.dart';
 import '../../../projects/presentation/widgets/task_comments_widget.dart';
 import 'task_details_screen.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class MyTasksScreen extends ConsumerStatefulWidget {
   const MyTasksScreen({super.key});
@@ -1604,9 +1605,53 @@ class _TaskReviewSheetState extends State<_TaskReviewSheet> {
                           ),
                           const SizedBox(height: 16),
 
-                          // 🔥 Add Comment Section (بديل Review Notes)
+                          // Review notes (mandatory for rejection)
+                          if (widget.confirmColor != null) ...[
+                            Row(
+                              children: [
+                                Icon(Icons.edit_note_rounded, size: 16, color: AppColors.error),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Rejection Reason *',
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.error),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _notesController,
+                              maxLines: 3,
+                              decoration: InputDecoration(
+                                hintText: widget.notesHint,
+                                hintStyle: TextStyle(color: cs.subtleText),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ] else ...[
+                            Row(
+                              children: [
+                                const Icon(Icons.chat_outlined, size: 16),
+                                const SizedBox(width: 6),
+                                Text('Notes (optional)', style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface)),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _notesController,
+                              maxLines: 2,
+                              decoration: InputDecoration(
+                                hintText: widget.notesHint,
+                                hintStyle: TextStyle(color: cs.subtleText),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Comments Section
                           Text(
-                            'Add Comment',
+                            'Comments',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: cs.primary,
@@ -1653,10 +1698,18 @@ class _TaskReviewSheetState extends State<_TaskReviewSheet> {
                                   )
                                 : null,
                             onPressed: () {
-                              Navigator.pop(
-                                context,
-                                _notesController.text.trim(),
-                              );
+                              final notes = _notesController.text.trim();
+                              // Mandatory notes for rejection
+                              if (widget.confirmColor != null && notes.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text('Please enter notes explaining the rejection reason.'),
+                                    backgroundColor: AppColors.error,
+                                  ),
+                                );
+                                return;
+                              }
+                              Navigator.pop(context, notes);
                             },
                             child: Text(widget.confirmText),
                           ),

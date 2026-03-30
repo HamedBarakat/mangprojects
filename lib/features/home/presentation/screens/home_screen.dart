@@ -22,6 +22,7 @@ import '../../../client/presentation/screens/clients_screen.dart';
 import 'package:mang_projects/features/office/presentation/controllers/office_settings_providers.dart';
 import '../../../projects/presentation/screens/my_tasks_screen.dart';
 import '../../../projects/presentation/screens/dc_tasks_screen.dart';
+import '../../../projects/presentation/screens/management_dashboard_screen.dart';
 import '../../../employees/presentation/screens/add_edit_employee_screen.dart';
 import '../../../employees/presentation/controllers/employee_providers.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
@@ -239,6 +240,11 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
           selectedIcon: Icon(Icons.bar_chart_rounded),
           label: 'Reports',
         ),
+        const NavigationDestination(
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard_rounded),
+          label: 'Dashboard',
+        ),
       ]);
     }
 
@@ -259,6 +265,11 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
           selectedIcon: Icon(Icons.bar_chart_rounded),
           label: 'Reports',
         ),
+        const NavigationDestination(
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard_rounded),
+          label: 'Dashboard',
+        ),
       ]);
     }
 
@@ -274,17 +285,27 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
           selectedIcon: Icon(Icons.access_time_filled_rounded),
           label: 'Attendance',
         ),
+        const NavigationDestination(
+          icon: Icon(Icons.bar_chart_outlined),
+          selectedIcon: Icon(Icons.bar_chart_rounded),
+          label: 'Reports',
+        ),
       ]);
     }
 
     if (user.isReviewer) {
-      items.add(
+      items.addAll([
         const NavigationDestination(
           icon: Icon(Icons.task_outlined),
           selectedIcon: Icon(Icons.task_rounded),
           label: 'My Tasks',
         ),
-      );
+        const NavigationDestination(
+          icon: Icon(Icons.bar_chart_outlined),
+          selectedIcon: Icon(Icons.bar_chart_rounded),
+          label: 'Reports',
+        ),
+      ]);
     }
 
     if (user.isDC) {
@@ -298,6 +319,11 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
           icon: Icon(Icons.access_time_outlined),
           selectedIcon: Icon(Icons.access_time_filled_rounded),
           label: 'Attendance',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.bar_chart_outlined),
+          selectedIcon: Icon(Icons.bar_chart_rounded),
+          label: 'Reports',
         ),
       ]);
     }
@@ -332,6 +358,7 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
       if (index == 3) return const ClientsScreen();
       if (index == 4) return const AttendanceScreen();
       if (index == 5) return const ReportsScreen();
+      if (index == 6) return const ManagementDashboardScreen();
       return const SettingsScreen();
     }
 
@@ -339,23 +366,27 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
       if (index == 2) return const MyTasksScreen();
       if (index == 3) return const AttendanceScreen();
       if (index == 4) return const ReportsScreen();
+      if (index == 5) return const ManagementDashboardScreen();
       return const SettingsScreen();
     }
 
     if (user.isTeamLeader || user.isEngineer) {
       if (index == 2) return const MyTasksScreen();
       if (index == 3) return const AttendanceScreen();
+      if (index == 4) return const ReportsScreen();
       return const SettingsScreen();
     }
 
     if (user.isReviewer) {
       if (index == 2) return const MyTasksScreen();
+      if (index == 3) return const ReportsScreen();
       return const SettingsScreen();
     }
 
     if (user.isDC) {
       if (index == 2) return const DCTasksScreen();
       if (index == 3) return const AttendanceScreen();
+      if (index == 4) return const ReportsScreen();
       return const SettingsScreen();
     }
 

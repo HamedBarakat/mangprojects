@@ -14,6 +14,7 @@ import 'report_export_stub.dart'
 
 import '../../../../features/home/presentation/controllers/home_providers.dart';
 import '../../../../features/home/data/models/user_model.dart';
+import '../../../../core/theme/app_theme.dart';
 
 // ── Date formatting helpers (بدون intl package) ──────────────────────────────
 String _fmtDate(dynamic v) {
@@ -141,8 +142,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                 _ProjectsReportTab(user: user),
                 _TasksReportTab(user: user),
                 _AttendanceReportTab(user: user),
-                _EmployeesReportTab(user: user),
-                _ClientsReportTab(user: user),
+                // Employee reports: restricted to management/admin/dept heads
+                user.canSeeEmployeeReports
+                    ? _EmployeesReportTab(user: user)
+                    : const _ReportAccessDenied(),
+                // Client reports: restricted to management/admin
+                user.canSeeEmployeeReports
+                    ? _ClientsReportTab(user: user)
+                    : const _ReportAccessDenied(),
               ],
             ),
     );
@@ -781,6 +788,30 @@ class _AttendanceReportTabState extends State<_AttendanceReportTab> {
 // ══════════════════════════════════════════════════════════════════════════════
 // EMPLOYEES REPORT
 // ══════════════════════════════════════════════════════════════════════════════
+
+class _ReportAccessDenied extends StatelessWidget {
+  const _ReportAccessDenied();
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.lock_outline_rounded, size: 56, color: cs.subtleText),
+          const SizedBox(height: 16),
+          Text('Restricted', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: cs.onSurface)),
+          const SizedBox(height: 8),
+          Text(
+            'Employee reports are only available\nto management and department heads.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: cs.subtleText, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _EmployeesReportTab extends StatefulWidget {
   final UserModel user;

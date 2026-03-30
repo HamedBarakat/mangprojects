@@ -260,7 +260,7 @@ class _ProjectsList extends ConsumerWidget {
                             fontWeight: FontWeight.w500),
                       ),
                       const SizedBox(height: 6),
-                       Text('Try adjusting your filters',
+                      Text('Try adjusting your filters',
                           style: TextStyle(
                               color: Theme.of(context).colorScheme.subtleText, fontSize: 12)),
                     ],

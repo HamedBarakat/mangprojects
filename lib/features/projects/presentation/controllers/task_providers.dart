@@ -1,7 +1,6 @@
 import 'dart:io';
-
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mang_projects/features/auth/presentation/controllers/auth_providers.dart';
 
@@ -436,6 +435,61 @@ final allVisibleTasksProvider = StreamProvider.autoDispose<List<TaskModel>>((
   return firestore
       .collection('tasks')
       .where('assignedEngineerIds', arrayContains: uid) // 🔥 use uid
+      .snapshots()
+      .map((s) => s.docs.map((d) => TaskModel.fromFirestore(d)).toList());
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Overdue Tasks Provider — for management dashboard & alerts
+// Tasks past endDate that are not completed
+// ══════════════════════════════════════════════════════════════════════════════
+
+final overdueTasksProvider = StreamProvider.autoDispose<List<TaskModel>>((ref) {
+  final uid = ref.watch(effectiveUidProvider);
+  if (uid == null) return const Stream.empty();
+
+  final user = ref.watch(currentUserProvider).value;
+  if (user == null) return const Stream.empty();
+
+  // Only visible to users who can see all projects
+  if (!user.canSeeAllProjects) return const Stream.empty();
+
+  final firestore = FirebaseFirestore.instance;
+  return firestore
+      .collection('tasks')
+      .where('officeId', isEqualTo: user.officeId)
+      .snapshots()
+      .map((s) {
+        final now = DateTime.now();
+        return s.docs
+            .map((d) => TaskModel.fromFirestore(d))
+            .where((t) =>
+                t.status != 'completed' &&
+                t.endDate.isBefore(now))
+            .toList()
+          ..sort((a, b) => a.endDate.compareTo(b.endDate));
+      });
+});
+
+final overdueTasksCountProvider = Provider<int>((ref) {
+  return ref.watch(overdueTasksProvider).when(
+    data: (tasks) => tasks.length,
+    loading: () => 0,
+    error: (_, _) => 0,
+  );
+});
+
+// ── All tasks by project for management overview ───────────────────────────────
+final allOfficeTasksProvider = StreamProvider.autoDispose<List<TaskModel>>((ref) {
+  final uid = ref.watch(effectiveUidProvider);
+  if (uid == null) return const Stream.empty();
+
+  final user = ref.watch(currentUserProvider).value;
+  if (user == null || !user.canSeeAllProjects) return const Stream.empty();
+
+  return FirebaseFirestore.instance
+      .collection('tasks')
+      .where('officeId', isEqualTo: user.officeId)
       .snapshots()
       .map((s) => s.docs.map((d) => TaskModel.fromFirestore(d)).toList());
 });

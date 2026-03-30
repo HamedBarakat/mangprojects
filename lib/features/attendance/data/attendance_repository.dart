@@ -1,16 +1,31 @@
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import 'models/attendance_model.dart';
 import 'package:mang_projects/features/office/data/models/office_model.dart';
 
 class AttendanceRepository {
   final _db = FirebaseFirestore.instance;
 
-  // ── Get office work times ─────────────────────────────────────────────────
   Future<OfficeModel> _getOffice(String officeId) async {
     final doc = await _db.collection('offices').doc(officeId).get();
     return OfficeModel.fromFirestore(doc);
   }
+
+  // ── Distance between two geo coords in meters (Haversine) ─────────────────
+  static double distanceMeters(
+      double lat1, double lng1, double lat2, double lng2) {
+    const r = 6371000.0;
+    final dLat = _rad(lat2 - lat1);
+    final dLng = _rad(lng2 - lng1);
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_rad(lat1)) *
+            math.cos(_rad(lat2)) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  }
+
+  static double _rad(double deg) => deg * math.pi / 180;
 
   // ── Check In ──────────────────────────────────────────────────────────────
   Future<String> checkIn({
@@ -18,11 +33,13 @@ class AttendanceRepository {
     required String employeeId,
     required String employeeName,
     required String employeeCode,
+    double? lat,
+    double? lng,
+    String? address,
   }) async {
     final now = DateTime.now();
     final date = _dateKey(now);
 
-    // منع الـ duplicate في نفس اليوم
     final existing = await _db
         .collection('attendance')
         .where('officeId', isEqualTo: officeId)
@@ -35,44 +52,50 @@ class AttendanceRepository {
       throw Exception('Already checked in today');
     }
 
-    // جيب وقت بداية العمل من الـ office
     final office = await _getOffice(officeId);
     final status = office.isLate(now) ? 'late' : 'present';
 
-    final doc = await _db.collection('attendance').add({
-      'officeId': officeId,
-      'employeeId': employeeId,
-      'employeeName': employeeName,
-      'employeeCode': employeeCode,
-      'checkIn': Timestamp.fromDate(now),
-      'checkOut': null,
-      'status': status,
-      'date': date,
-      'notes': '',
-    });
+    final data = <String, dynamic>{
+      'officeId':      officeId,
+      'employeeId':    employeeId,
+      'employeeName':  employeeName,
+      'employeeCode':  employeeCode,
+      'checkIn':       Timestamp.fromDate(now),
+      'checkOut':      null,
+      'status':        status,
+      'date':          date,
+      'notes':         '',
+    };
+    if (lat != null) data['checkInLat'] = lat;
+    if (lng != null) data['checkInLng'] = lng;
+    if (address != null) data['checkInAddress'] = address;
 
+    final doc = await _db.collection('attendance').add(data);
     return doc.id;
   }
 
   // ── Check Out ─────────────────────────────────────────────────────────────
-  /// بيرجع true لو الوقت بعد workEndTime → يعني في overtime
-  /// الـ UI هيسأل الموظف يطلب موافقة على الـ overtime
   Future<bool> checkOut({
     required String officeId,
     required String recordId,
+    double? lat,
+    double? lng,
   }) async {
     final now = DateTime.now();
     final office = await _getOffice(officeId);
     final isOvertime = office.isOvertime(now);
 
-    await _db.collection('attendance').doc(recordId).update({
+    final updates = <String, dynamic>{
       'checkOut': Timestamp.fromDate(now),
-    });
+    };
+    if (lat != null) updates['checkOutLat'] = lat;
+    if (lng != null) updates['checkOutLng'] = lng;
 
+    await _db.collection('attendance').doc(recordId).update(updates);
     return isOvertime;
   }
 
-  // ── Request Overtime ──────────────────────────────────────────────────────
+  // ── Overtime ──────────────────────────────────────────────────────────────
   Future<void> requestOvertime({
     required String officeId,
     required String employeeId,
@@ -83,49 +106,43 @@ class AttendanceRepository {
     String notes = '',
   }) async {
     await _db.collection('overtime_requests').add({
-      'officeId': officeId,
-      'employeeId': employeeId,
-      'employeeName': employeeName,
-      'attendanceRecordId': attendanceRecordId,
-      'date': date,
-      'extraHours': extraHours,
-      'status': 'pending', // pending / approved / rejected
-      'approvedBy': null,
-      'approvedAt': null,
-      'notes': notes,
-      'createdAt': FieldValue.serverTimestamp(),
+      'officeId':            officeId,
+      'employeeId':          employeeId,
+      'employeeName':        employeeName,
+      'attendanceRecordId':  attendanceRecordId,
+      'date':                date,
+      'extraHours':          extraHours,
+      'status':              'pending',
+      'approvedBy':          null,
+      'approvedAt':          null,
+      'notes':               notes,
+      'createdAt':           FieldValue.serverTimestamp(),
     });
   }
 
-  // ── Approve / Reject Overtime (Admin only) ────────────────────────────────
   Future<void> respondToOvertime({
     required String requestId,
     required String adminId,
     required bool approved,
   }) async {
     await _db.collection('overtime_requests').doc(requestId).update({
-      'status': approved ? 'approved' : 'rejected',
+      'status':     approved ? 'approved' : 'rejected',
       'approvedBy': adminId,
       'approvedAt': FieldValue.serverTimestamp(),
     });
   }
 
-  // ── Watch pending overtime requests (Admin) ───────────────────────────────
-  Stream<List<Map<String, dynamic>>> watchPendingOvertimeRequests(
-    String officeId,
-  ) {
+  // ── Streams ───────────────────────────────────────────────────────────────
+  Stream<List<Map<String, dynamic>>> watchPendingOvertimeRequests(String officeId) {
     return _db
         .collection('overtime_requests')
         .where('officeId', isEqualTo: officeId)
         .where('status', isEqualTo: 'pending')
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(
-          (snap) => snap.docs.map((d) => {'id': d.id, ...d.data()}).toList(),
-        );
+        .map((s) => s.docs.map((d) => {'id': d.id, ...d.data()}).toList());
   }
 
-  // ── Watch today's record for a specific employee ──────────────────────────
   Stream<AttendanceModel?> watchTodayRecord({
     required String officeId,
     required String employeeId,
@@ -138,14 +155,9 @@ class AttendanceRepository {
         .where('date', isEqualTo: today)
         .limit(1)
         .snapshots()
-        .map(
-          (snap) => snap.docs.isEmpty
-              ? null
-              : AttendanceModel.fromFirestore(snap.docs.first),
-        );
+        .map((s) => s.docs.isEmpty ? null : AttendanceModel.fromFirestore(s.docs.first));
   }
 
-  // ── Watch all attendance for today (Admin view) ───────────────────────────
   Stream<List<AttendanceModel>> watchTodayAll(String officeId) {
     final today = _dateKey(DateTime.now());
     return _db
@@ -154,20 +166,16 @@ class AttendanceRepository {
         .where('date', isEqualTo: today)
         .orderBy('checkIn', descending: false)
         .snapshots()
-        .map(
-          (snap) =>
-              snap.docs.map((d) => AttendanceModel.fromFirestore(d)).toList(),
-        );
+        .map((s) => s.docs.map((d) => AttendanceModel.fromFirestore(d)).toList());
   }
 
-  // ── Watch monthly records for one employee ────────────────────────────────
   Stream<List<AttendanceModel>> watchMonthlyRecords({
     required String officeId,
     required String employeeId,
     required int year,
     required int month,
   }) {
-    final prefix = '${year.toString()}-${month.toString().padLeft(2, '0')}';
+    final prefix = '$year-${month.toString().padLeft(2, '0')}';
     return _db
         .collection('attendance')
         .where('officeId', isEqualTo: officeId)
@@ -176,20 +184,16 @@ class AttendanceRepository {
         .where('date', isLessThanOrEqualTo: '$prefix-31')
         .orderBy('date', descending: true)
         .snapshots()
-        .map(
-          (snap) =>
-              snap.docs.map((d) => AttendanceModel.fromFirestore(d)).toList(),
-        );
+        .map((s) => s.docs.map((d) => AttendanceModel.fromFirestore(d)).toList());
   }
 
-  // ── Monthly stats for one employee ────────────────────────────────────────
   Future<Map<String, int>> getMonthlyStats({
     required String officeId,
     required String employeeId,
     required int year,
     required int month,
   }) async {
-    final prefix = '${year.toString()}-${month.toString().padLeft(2, '0')}';
+    final prefix = '$year-${month.toString().padLeft(2, '0')}';
     final snap = await _db
         .collection('attendance')
         .where('officeId', isEqualTo: officeId)
@@ -197,19 +201,14 @@ class AttendanceRepository {
         .where('date', isGreaterThanOrEqualTo: '$prefix-01')
         .where('date', isLessThanOrEqualTo: '$prefix-31')
         .get();
-
-    final records = snap.docs
-        .map((d) => AttendanceModel.fromFirestore(d))
-        .toList();
-
+    final records = snap.docs.map((d) => AttendanceModel.fromFirestore(d)).toList();
     return {
       'present': records.where((r) => r.status == 'present').length,
-      'late': records.where((r) => r.status == 'late').length,
-      'absent': records.where((r) => r.status == 'absent').length,
+      'late':    records.where((r) => r.status == 'late').length,
+      'absent':  records.where((r) => r.status == 'absent').length,
     };
   }
 
-  // ── Helper ────────────────────────────────────────────────────────────────
   String _dateKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }

@@ -4,11 +4,11 @@ import 'models/notification_model.dart';
 class NotificationRepository {
   final _ref = FirebaseFirestore.instance.collection('notifications');
 
-  // ── Stream إشعارات الشخص الحالي ──────────────────────────────────────────
+  // ── Stream ────────────────────────────────────────────────────────────────
   Stream<List<NotificationModel>> watchMyNotifications(String uid) {
     return _ref
         .where('recipientId', isEqualTo: uid)
-        .limit(50)
+        .limit(60)
         .snapshots()
         .map((s) {
           final list = s.docs.map(NotificationModel.fromFirestore).toList();
@@ -17,7 +17,6 @@ class NotificationRepository {
         });
   }
 
-  // ── عدد الغير مقروءة ─────────────────────────────────────────────────────
   Stream<int> watchUnreadCount(String uid) {
     return _ref
         .where('recipientId', isEqualTo: uid)
@@ -26,7 +25,7 @@ class NotificationRepository {
         .map((s) => s.docs.length);
   }
 
-  // ── إرسال إشعار لشخص واحد ────────────────────────────────────────────────
+  // ── Send to one ───────────────────────────────────────────────────────────
   Future<void> sendToUser({
     required String officeId,
     required String recipientId,
@@ -55,7 +54,7 @@ class NotificationRepository {
     ).toFirestore());
   }
 
-  // ── إرسال إشعار لمجموعة (batch) ─────────────────────────────────────────
+  // ── Send to many (batch) ──────────────────────────────────────────────────
   Future<void> sendToMany({
     required String officeId,
     required List<String> recipientIds,
@@ -69,7 +68,6 @@ class NotificationRepository {
   }) async {
     final batch = FirebaseFirestore.instance.batch();
     final unique = recipientIds.where((id) => id.isNotEmpty).toSet().toList();
-
     for (final uid in unique) {
       final doc = _ref.doc();
       batch.set(doc, NotificationModel(
@@ -90,7 +88,7 @@ class NotificationRepository {
     await batch.commit();
   }
 
-  // ── تحديد كمقروء ─────────────────────────────────────────────────────────
+  // ── Mark as read ──────────────────────────────────────────────────────────
   Future<void> markAsRead(String notificationId) async {
     await _ref.doc(notificationId).update({'isRead': true});
   }
@@ -111,7 +109,7 @@ class NotificationRepository {
     await _ref.doc(id).delete();
   }
 
-  // ── اجلب stakeholders المكتب (Admin + DC + Section Head + COO + Principal) ─
+  // ── Fetch office-wide stakeholders (Admin + DC + Management + senior titles) ─
   Future<List<String>> fetchOfficeWideStakeholders(String officeId) async {
     final snap = await FirebaseFirestore.instance
         .collection('users')
@@ -141,7 +139,7 @@ class NotificationRepository {
         .toList();
   }
 
-  // ── إشعار تغيّر حالة task ────────────────────────────────────────────────
+  // ── Task status change notification ──────────────────────────────────────
   Future<void> sendTaskStatusNotification({
     required String officeId,
     required String taskId,
@@ -154,13 +152,11 @@ class NotificationRepository {
     required String teamLeaderId,
     required String reviewerId,
     required List<String> officeWideIds,
-    String clientId = '',   // ← clientId of the task (to notify client users)
+    String clientId = '',
   }) async {
     final statusLabel = _statusLabel(newStatus);
-    final body =
-        '"$taskTitle" → $statusLabel\nBy $changedByName · $projectName';
+    final body = '"$taskTitle" → $statusLabel\nBy $changedByName · $projectName';
 
-    // ── إشعار عام لكل المعنيين ───────────────────────────────────────────────
     final allRecipients = <String>{
       ...engineerIds,
       if (teamLeaderId.isNotEmpty) teamLeaderId,
@@ -180,8 +176,7 @@ class NotificationRepository {
       taskTitle: taskTitle,
     );
 
-    // ── إشعار خاص لـ DC عند إرسال المهمة للعميل (client_review) ────────────
-    // DC يحتاج يعرف فورًا عشان يجهّز مستندات الإرسال
+    // When QC approves → notify DC for dispatch + notify client
     if (newStatus == 'client_review') {
       final dcIds = await _fetchDCUsers(officeId);
       if (dcIds.isNotEmpty) {
@@ -189,9 +184,7 @@ class NotificationRepository {
           officeId: officeId,
           recipientIds: dcIds,
           title: '📤 Ready for Client Dispatch',
-          body:
-              '"$taskTitle" is ready to send to client.\n'
-              'Project: $projectName\nApproved by: $changedByName',
+          body: '"$taskTitle" is ready to send to client.\nProject: $projectName\nApproved by: $changedByName',
           type: 'dc_dispatch_required',
           projectId: projectId,
           projectName: projectName,
@@ -200,7 +193,6 @@ class NotificationRepository {
         );
       }
 
-      // ── إشعار للـ Client users المرتبطين بهذا المشروع ──────────────────
       if (clientId.isNotEmpty) {
         final clientUserIds = await _fetchClientUsers(clientId, officeId);
         if (clientUserIds.isNotEmpty) {
@@ -208,9 +200,7 @@ class NotificationRepository {
             officeId: officeId,
             recipientIds: clientUserIds,
             title: '🔔 Task Ready for Your Review',
-            body:
-                '"$taskTitle" is awaiting your approval.\n'
-                'Project: $projectName',
+            body: '"$taskTitle" is awaiting your approval.\nProject: $projectName',
             type: 'client_review_required',
             projectId: projectId,
             projectName: projectName,
@@ -222,31 +212,42 @@ class NotificationRepository {
     }
   }
 
-  // ── جلب DC users في المكتب ─────────────────────────────────────────────
-  Future<List<String>> _fetchDCUsers(String officeId) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .where('officeId', isEqualTo: officeId)
-        .where('role', isEqualTo: 'dc')
-        .where('isActive', isEqualTo: true)
-        .get();
-    return snap.docs.map((d) => d.id).toList();
+  // ── DC dispatched notification (FIX: separate type — no DC loop) ──────────
+  Future<void> sendDCDispatchedNotification({
+    required String officeId,
+    required String taskId,
+    required String taskTitle,
+    required String projectId,
+    required String projectName,
+    required String dcName,
+    required List<String> engineerIds,
+    required String teamLeaderId,
+    required String reviewerId,
+    required List<String> officeWideIds,
+  }) async {
+    // Notify team (NOT DC again — avoids loop)
+    final recipients = <String>{
+      ...engineerIds,
+      if (teamLeaderId.isNotEmpty) teamLeaderId,
+      if (reviewerId.isNotEmpty) reviewerId,
+      // Only management/admin from officeWide, not DC
+      ...officeWideIds,
+    };
+
+    await sendToMany(
+      officeId: officeId,
+      recipientIds: recipients.toList(),
+      title: '📬 Sent to Client',
+      body: '"$taskTitle" has been officially dispatched to the client.\nBy $dcName · $projectName',
+      type: 'dc_dispatched',
+      projectId: projectId,
+      projectName: projectName,
+      taskId: taskId,
+      taskTitle: taskTitle,
+    );
   }
 
-  // ── جلب Client users المرتبطين بـ clientId معين ───────────────────────
-  Future<List<String>> _fetchClientUsers(
-      String clientId, String officeId) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .where('officeId', isEqualTo: officeId)
-        .where('role', isEqualTo: 'client')
-        .where('linkedClientId', isEqualTo: clientId)
-        .where('isActive', isEqualTo: true)
-        .get();
-    return snap.docs.map((d) => d.id).toList();
-  }
-
-  // ── إشعار إسناد task جديدة ───────────────────────────────────────────────
+  // ── Task assigned notification ────────────────────────────────────────────
   Future<void> sendTaskAssignedNotification({
     required String officeId,
     required String taskId,
@@ -279,15 +280,60 @@ class NotificationRepository {
     );
   }
 
+  // ── Overdue task alert (called from management dashboard / daily check) ───
+  Future<void> sendOverdueAlert({
+    required String officeId,
+    required String taskId,
+    required String taskTitle,
+    required String projectId,
+    required String projectName,
+    required List<String> recipientIds,
+    required int daysOverdue,
+  }) async {
+    await sendToMany(
+      officeId: officeId,
+      recipientIds: recipientIds,
+      title: '⏰ Task Overdue',
+      body: '"$taskTitle" is $daysOverdue day${daysOverdue == 1 ? '' : 's'} overdue.\nProject: $projectName',
+      type: 'task_overdue',
+      projectId: projectId,
+      projectName: projectName,
+      taskId: taskId,
+      taskTitle: taskTitle,
+    );
+  }
+
+  // ── Private helpers ───────────────────────────────────────────────────────
+  Future<List<String>> _fetchDCUsers(String officeId) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .where('officeId', isEqualTo: officeId)
+        .where('role', isEqualTo: 'dc')
+        .where('isActive', isEqualTo: true)
+        .get();
+    return snap.docs.map((d) => d.id).toList();
+  }
+
+  Future<List<String>> _fetchClientUsers(String clientId, String officeId) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .where('officeId', isEqualTo: officeId)
+        .where('role', isEqualTo: 'client')
+        .where('linkedClientId', isEqualTo: clientId)
+        .where('isActive', isEqualTo: true)
+        .get();
+    return snap.docs.map((d) => d.id).toList();
+  }
+
   String _statusLabel(String status) {
     switch (status) {
-      case 'not_started':      return 'Not Started';
-      case 'in_progress':      return 'In Progress';
-      case 'team_leader_review': return 'Team Leader Review';
-      case 'qc_review':        return 'QC Review';
-      case 'client_review':    return 'Client Review';
-      case 'completed':        return 'Completed ✅';
-      default:                 return status;
+      case 'not_started':         return 'Not Started';
+      case 'in_progress':         return 'In Progress';
+      case 'team_leader_review':  return 'Team Leader Review';
+      case 'qc_review':           return 'QC Review';
+      case 'client_review':       return 'Client Review';
+      case 'completed':           return 'Completed ✅';
+      default:                    return status;
     }
   }
 }

@@ -1,22 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mang_projects/core/services/location_service.dart';
 
 import '../../data/models/attendance_model.dart';
 import '../../data/attendance_repository.dart';
 import '../../../../features/home/presentation/controllers/home_providers.dart';
 
-// ── Repository ────────────────────────────────────────────────────────────────
-final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
-  return AttendanceRepository();
-});
+// ── Repository & Services ─────────────────────────────────────────────────────
+final attendanceRepositoryProvider = Provider<AttendanceRepository>((_) => AttendanceRepository());
+final locationServiceProvider = Provider<LocationService>((_) => LocationService());
 
-// ── Today's record للموظف الحالي ─────────────────────────────────────────────
+// ── Today's record for current user ──────────────────────────────────────────
 final todayRecordProvider = StreamProvider<AttendanceModel?>((ref) {
   final userAsync = ref.watch(currentUserProvider);
   return userAsync.when(
     data: (user) {
       if (user == null) return const Stream.empty();
-      return ref
-          .watch(attendanceRepositoryProvider)
+      return ref.watch(attendanceRepositoryProvider)
           .watchTodayRecord(officeId: user.officeId, employeeId: user.uid);
     },
     loading: () => const Stream.empty(),
@@ -24,114 +23,90 @@ final todayRecordProvider = StreamProvider<AttendanceModel?>((ref) {
   );
 });
 
-// ── هل الموظف عمل check-in النهارده؟ ────────────────────────────────────────
 final isCheckedInProvider = Provider<bool>((ref) {
-  final todayAsync = ref.watch(todayRecordProvider);
-  return todayAsync.when(
-    data: (record) => record != null,
-    loading: () => false,
-    error: (_, _) => false,
+  return ref.watch(todayRecordProvider).when(
+    data: (r) => r != null, loading: () => false, error: (_, _) => false,
   );
 });
 
-// ── هل الموظف عمل check-out النهارده؟ ───────────────────────────────────────
 final isCheckedOutProvider = Provider<bool>((ref) {
-  final todayAsync = ref.watch(todayRecordProvider);
-  return todayAsync.when(
-    data: (record) => record?.isCheckedOut ?? false,
-    loading: () => false,
-    error: (_, _) => false,
+  return ref.watch(todayRecordProvider).when(
+    data: (r) => r?.isCheckedOut ?? false, loading: () => false, error: (_, _) => false,
   );
 });
 
-// ── كل الحضور النهارده (Admin view) ──────────────────────────────────────────
+// ── All attendance today (Admin/Management view) ───────────────────────────────
 final todayAllAttendanceProvider = StreamProvider<List<AttendanceModel>>((ref) {
   final userAsync = ref.watch(currentUserProvider);
   return userAsync.when(
     data: (user) {
       if (user == null) return const Stream.empty();
-      return ref
-          .watch(attendanceRepositoryProvider)
-          .watchTodayAll(user.officeId);
+      return ref.watch(attendanceRepositoryProvider).watchTodayAll(user.officeId);
     },
     loading: () => const Stream.empty(),
     error: (_, _) => const Stream.empty(),
   );
 });
 
-// ── Selected month state ──────────────────────────────────────────────────────
+// ── Selected month ────────────────────────────────────────────────────────────
 final selectedMonthProvider = StateProvider<DateTime>((ref) {
   final now = DateTime.now();
   return DateTime(now.year, now.month);
 });
 
-// ── Monthly records للموظف الحالي ────────────────────────────────────────────
+// ── Monthly records for current user ─────────────────────────────────────────
 final myMonthlyRecordsProvider = StreamProvider<List<AttendanceModel>>((ref) {
   final userAsync = ref.watch(currentUserProvider);
-  final selectedMonth = ref.watch(selectedMonthProvider);
-
+  final month = ref.watch(selectedMonthProvider);
   return userAsync.when(
     data: (user) {
       if (user == null) return const Stream.empty();
-      return ref
-          .watch(attendanceRepositoryProvider)
-          .watchMonthlyRecords(
-            officeId: user.officeId,
-            employeeId: user.uid,
-            year: selectedMonth.year,
-            month: selectedMonth.month,
-          );
+      return ref.watch(attendanceRepositoryProvider).watchMonthlyRecords(
+        officeId: user.officeId,
+        employeeId: user.uid,
+        year: month.year,
+        month: month.month,
+      );
     },
     loading: () => const Stream.empty(),
     error: (_, _) => const Stream.empty(),
   );
 });
 
-// ── Monthly stats للموظف الحالي ──────────────────────────────────────────────
+// ── Monthly stats ─────────────────────────────────────────────────────────────
 final myMonthlyStatsProvider = FutureProvider<Map<String, int>>((ref) async {
   final userAsync = ref.watch(currentUserProvider);
-  final selectedMonth = ref.watch(selectedMonthProvider);
-
+  final month = ref.watch(selectedMonthProvider);
   return userAsync.when(
     data: (user) async {
       if (user == null) return {'present': 0, 'late': 0, 'absent': 0};
-      return await ref
-          .watch(attendanceRepositoryProvider)
-          .getMonthlyStats(
-            officeId: user.officeId,
-            employeeId: user.uid,
-            year: selectedMonth.year,
-            month: selectedMonth.month,
-          );
+      return ref.watch(attendanceRepositoryProvider).getMonthlyStats(
+        officeId: user.officeId,
+        employeeId: user.uid,
+        year: month.year,
+        month: month.month,
+      );
     },
     loading: () async => {'present': 0, 'late': 0, 'absent': 0},
     error: (_, _) async => {'present': 0, 'late': 0, 'absent': 0},
   );
 });
 
-// ── Pending overtime requests (Admin) ────────────────────────────────────────
-final pendingOvertimeProvider = StreamProvider<List<Map<String, dynamic>>>((
-  ref,
-) {
+// ── Pending overtime requests ─────────────────────────────────────────────────
+final pendingOvertimeProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
   final userAsync = ref.watch(currentUserProvider);
   return userAsync.when(
     data: (user) {
       if (user == null || !user.isAdmin) return const Stream.empty();
-      return ref
-          .watch(attendanceRepositoryProvider)
-          .watchPendingOvertimeRequests(user.officeId);
+      return ref.watch(attendanceRepositoryProvider).watchPendingOvertimeRequests(user.officeId);
     },
     loading: () => const Stream.empty(),
     error: (_, _) => const Stream.empty(),
   );
 });
 
-// ── Pending overtime count — للـ badge في الـ nav ────────────────────────────
 final pendingOvertimeCountProvider = Provider<int>((ref) {
-  final pendingAsync = ref.watch(pendingOvertimeProvider);
-  return pendingAsync.when(
-    data: (list) => list.length,
-    loading: () => 0,
-    error: (_, _) => 0,
+  return ref.watch(pendingOvertimeProvider).when(
+    data: (list) => list.length, loading: () => 0, error: (_, _) => 0,
   );
 });
