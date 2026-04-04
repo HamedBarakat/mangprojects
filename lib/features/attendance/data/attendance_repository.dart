@@ -36,6 +36,8 @@ class AttendanceRepository {
     double? lat,
     double? lng,
     String? address,
+    bool exemptFromRules = false,
+    String? effectiveStartTime, // "HH:mm" — if null, reads from office model
   }) async {
     final now = DateTime.now();
     final date = _dateKey(now);
@@ -52,8 +54,20 @@ class AttendanceRepository {
       throw Exception('Already checked in today');
     }
 
-    final office = await _getOffice(officeId);
-    final status = office.isLate(now) ? 'late' : 'present';
+    String status;
+    if (exemptFromRules) {
+      status = 'present';
+    } else if (effectiveStartTime != null && effectiveStartTime.isNotEmpty) {
+      final parts = effectiveStartTime.split(':');
+      final h = int.tryParse(parts[0]) ?? 9;
+      final m = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+      status = (now.hour > h || (now.hour == h && now.minute > m))
+          ? 'late'
+          : 'present';
+    } else {
+      final office = await _getOffice(officeId);
+      status = office.isLate(now) ? 'late' : 'present';
+    }
 
     final data = <String, dynamic>{
       'officeId':      officeId,
@@ -164,9 +178,12 @@ class AttendanceRepository {
         .collection('attendance')
         .where('officeId', isEqualTo: officeId)
         .where('date', isEqualTo: today)
-        .orderBy('checkIn', descending: false)
         .snapshots()
-        .map((s) => s.docs.map((d) => AttendanceModel.fromFirestore(d)).toList());
+        .map((s) {
+          final list = s.docs.map((d) => AttendanceModel.fromFirestore(d)).toList();
+          list.sort((a, b) => a.checkIn.compareTo(b.checkIn));
+          return list;
+        });
   }
 
   Stream<List<AttendanceModel>> watchMonthlyRecords({
@@ -175,13 +192,14 @@ class AttendanceRepository {
     required int year,
     required int month,
   }) {
-    final prefix = '$year-${month.toString().padLeft(2, '0')}';
+    final mm = month.toString().padLeft(2, '0');
+    final from = '$year-$mm-01';
+    final to   = '$year-$mm-31';
     return _db
         .collection('attendance')
-        .where('officeId', isEqualTo: officeId)
         .where('employeeId', isEqualTo: employeeId)
-        .where('date', isGreaterThanOrEqualTo: '$prefix-01')
-        .where('date', isLessThanOrEqualTo: '$prefix-31')
+        .where('date', isGreaterThanOrEqualTo: from)
+        .where('date', isLessThanOrEqualTo: to)
         .orderBy('date', descending: true)
         .snapshots()
         .map((s) => s.docs.map((d) => AttendanceModel.fromFirestore(d)).toList());
@@ -193,13 +211,14 @@ class AttendanceRepository {
     required int year,
     required int month,
   }) async {
-    final prefix = '$year-${month.toString().padLeft(2, '0')}';
+    final mm = month.toString().padLeft(2, '0');
+    final from = '$year-$mm-01';
+    final to   = '$year-$mm-31';
     final snap = await _db
         .collection('attendance')
-        .where('officeId', isEqualTo: officeId)
         .where('employeeId', isEqualTo: employeeId)
-        .where('date', isGreaterThanOrEqualTo: '$prefix-01')
-        .where('date', isLessThanOrEqualTo: '$prefix-31')
+        .where('date', isGreaterThanOrEqualTo: from)
+        .where('date', isLessThanOrEqualTo: to)
         .get();
     final records = snap.docs.map((d) => AttendanceModel.fromFirestore(d)).toList();
     return {
@@ -207,6 +226,19 @@ class AttendanceRepository {
       'late':    records.where((r) => r.status == 'late').length,
       'absent':  records.where((r) => r.status == 'absent').length,
     };
+  }
+
+  Stream<List<AttendanceModel>> watchDayAttendance(String officeId, String date) {
+    return _db
+        .collection('attendance')
+        .where('officeId', isEqualTo: officeId)
+        .where('date', isEqualTo: date)
+        .snapshots()
+        .map((s) {
+          final list = s.docs.map((d) => AttendanceModel.fromFirestore(d)).toList();
+          list.sort((a, b) => a.checkIn.compareTo(b.checkIn));
+          return list;
+        });
   }
 
   String _dateKey(DateTime d) =>

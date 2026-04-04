@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -l \"class.*Provider\\\\|final.*Provider\" lib/**/*.dart)",
+      "Bash(find ./lib -name \"*.dart\" -type f -exec grep -l \"unfinished\\\\|incomplete\\\\|wip\\\\|work.in.progress\" {} \\\\;)",
+      "mcp__ide__getDiagnostics",
+      "Bash(flutter run:*)",
+      "Bash(python3 -c \"import sys,json; [print\\(json.loads\\(l\\).get\\('role',''\\), json.loads\\(l\\).get\\('content',''\\)[:500] if isinstance\\(json.loads\\(l\\).get\\('content',''\\), str\\) else str\\(json.loads\\(l\\).get\\('content',''\\)\\)[:500]\\) for l in sys.stdin]\")",
+      "Bash(python3:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(grep \"lib/features/leaves\\\\|lib\\\\\\\\features\\\\\\\\leaves\")",
+      "Bash(flutter build:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(start /B flutter run -d chrome --web-port=8080)"
+    ]
+  }
+}

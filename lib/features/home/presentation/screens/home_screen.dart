@@ -27,6 +27,7 @@ import '../../../employees/presentation/screens/add_edit_employee_screen.dart';
 import '../../../employees/presentation/controllers/employee_providers.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../notifications/presentation/controllers/notification_providers.dart';
+import '../../../leaves/presentation/screens/leaves_screen.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/theme_provider.dart';
 
@@ -174,220 +175,212 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // _getNavItems — order here MUST match _getBody index mapping exactly.
+  // isReviewer is checked before isAdmin: a reviewer can have adminFlag=true
+  // which would make isAdmin true and route them to the wrong nav.
+  // ─────────────────────────────────────────────────────────────────────────
   List<NavigationDestination> _getNavItems(UserModel user) {
+
+    // ── CLIENT ───────────────────────────────────────────────────────────────
+    // 0=MyProjects  1=Settings
     if (user.isClient) {
       return const [
-        NavigationDestination(
-          icon: Icon(Icons.folder_outlined),
-          selectedIcon: Icon(Icons.folder_rounded),
-          label: 'My Projects',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.settings_outlined),
-          selectedIcon: Icon(Icons.settings_rounded),
-          label: 'Settings',
-        ),
+        NavigationDestination(icon: Icon(Icons.folder_outlined),       selectedIcon: Icon(Icons.folder_rounded),              label: 'My Projects'),
+        NavigationDestination(icon: Icon(Icons.settings_outlined),     selectedIcon: Icon(Icons.settings_rounded),            label: 'Settings'),
       ];
     }
 
+    // ── ADMINISTRATION ────────────────────────────────────────────────────────
+    // 0=Attendance  1=Leaves  2=Settings
     if (user.isAdministration) {
       return const [
-        NavigationDestination(
-          icon: Icon(Icons.access_time_outlined),
-          selectedIcon: Icon(Icons.access_time_filled_rounded),
-          label: 'Attendance',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.settings_outlined),
-          selectedIcon: Icon(Icons.settings_rounded),
-          label: 'Settings',
-        ),
+        NavigationDestination(icon: Icon(Icons.access_time_outlined),  selectedIcon: Icon(Icons.access_time_filled_rounded),  label: 'Attendance'),
+        NavigationDestination(icon: Icon(Icons.event_note_outlined),   selectedIcon: Icon(Icons.event_note_rounded),          label: 'Leaves'),
+        NavigationDestination(icon: Icon(Icons.settings_outlined),     selectedIcon: Icon(Icons.settings_rounded),            label: 'Settings'),
       ];
     }
 
-    final items = <NavigationDestination>[
-      const NavigationDestination(
-        icon: Icon(Icons.home_outlined),
-        selectedIcon: Icon(Icons.home_rounded),
-        label: 'Home',
-      ),
-      const NavigationDestination(
-        icon: Icon(Icons.business_center_outlined),
-        selectedIcon: Icon(Icons.business_center_rounded),
-        label: 'Projects',
-      ),
-    ];
-
-    if (user.isAdmin) {
-      items.addAll([
-        const NavigationDestination(
-          icon: Icon(Icons.people_outline_rounded),
-          selectedIcon: Icon(Icons.people_rounded),
-          label: 'Employees',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.business_outlined),
-          selectedIcon: Icon(Icons.business_rounded),
-          label: 'Clients',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.access_time_outlined),
-          selectedIcon: Icon(Icons.access_time_filled_rounded),
-          label: 'Attendance',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.bar_chart_outlined),
-          selectedIcon: Icon(Icons.bar_chart_rounded),
-          label: 'Reports',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.dashboard_outlined),
-          selectedIcon: Icon(Icons.dashboard_rounded),
-          label: 'Dashboard',
-        ),
-      ]);
-    }
-
-    if (user.isManagement && !user.isAdmin) {
-      items.addAll([
-        const NavigationDestination(
-          icon: Icon(Icons.task_outlined),
-          selectedIcon: Icon(Icons.task_rounded),
-          label: 'My Tasks',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.access_time_outlined),
-          selectedIcon: Icon(Icons.access_time_filled_rounded),
-          label: 'Attendance',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.bar_chart_outlined),
-          selectedIcon: Icon(Icons.bar_chart_rounded),
-          label: 'Reports',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.dashboard_outlined),
-          selectedIcon: Icon(Icons.dashboard_rounded),
-          label: 'Dashboard',
-        ),
-      ]);
-    }
-
-    if (user.isTeamLeader || user.isEngineer) {
-      items.addAll([
-        const NavigationDestination(
-          icon: Icon(Icons.task_outlined),
-          selectedIcon: Icon(Icons.task_rounded),
-          label: 'My Tasks',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.access_time_outlined),
-          selectedIcon: Icon(Icons.access_time_filled_rounded),
-          label: 'Attendance',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.bar_chart_outlined),
-          selectedIcon: Icon(Icons.bar_chart_rounded),
-          label: 'Reports',
-        ),
-      ]);
-    }
-
+    // ── REVIEWER ──────────────────────────────────────────────────────────────
+    // 0=Home  1=Projects  2=MyTasks  3=Attendance  4=Leaves  5=Reports  6=Settings
     if (user.isReviewer) {
-      items.addAll([
-        const NavigationDestination(
-          icon: Icon(Icons.task_outlined),
-          selectedIcon: Icon(Icons.task_rounded),
-          label: 'My Tasks',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.bar_chart_outlined),
-          selectedIcon: Icon(Icons.bar_chart_rounded),
-          label: 'Reports',
-        ),
-      ]);
+      return const [
+        NavigationDestination(icon: Icon(Icons.home_outlined),              selectedIcon: Icon(Icons.home_rounded),                label: 'Home'),
+        NavigationDestination(icon: Icon(Icons.business_center_outlined),   selectedIcon: Icon(Icons.business_center_rounded),     label: 'Projects'),
+        NavigationDestination(icon: Icon(Icons.task_outlined),              selectedIcon: Icon(Icons.task_rounded),                label: 'My Tasks'),
+        NavigationDestination(icon: Icon(Icons.access_time_outlined),       selectedIcon: Icon(Icons.access_time_filled_rounded),  label: 'Attendance'),
+        NavigationDestination(icon: Icon(Icons.event_note_outlined),        selectedIcon: Icon(Icons.event_note_rounded),          label: 'Leaves'),
+        NavigationDestination(icon: Icon(Icons.bar_chart_outlined),         selectedIcon: Icon(Icons.bar_chart_rounded),           label: 'Reports'),
+        NavigationDestination(icon: Icon(Icons.settings_outlined),          selectedIcon: Icon(Icons.settings_rounded),            label: 'Settings'),
+      ];
     }
 
+    // ── ADMIN ─────────────────────────────────────────────────────────────────
+    // 0=Home  1=Projects  2=Employees  3=Clients  4=Attendance
+    // 5=Leaves  6=Reports  7=Dashboard  8=Settings
+    if (user.isAdmin) {
+      return const [
+        NavigationDestination(icon: Icon(Icons.home_outlined),              selectedIcon: Icon(Icons.home_rounded),                label: 'Home'),
+        NavigationDestination(icon: Icon(Icons.business_center_outlined),   selectedIcon: Icon(Icons.business_center_rounded),     label: 'Projects'),
+        NavigationDestination(icon: Icon(Icons.people_outline_rounded),     selectedIcon: Icon(Icons.people_rounded),              label: 'Employees'),
+        NavigationDestination(icon: Icon(Icons.business_outlined),          selectedIcon: Icon(Icons.business_rounded),            label: 'Clients'),
+        NavigationDestination(icon: Icon(Icons.access_time_outlined),       selectedIcon: Icon(Icons.access_time_filled_rounded),  label: 'Attendance'),
+        NavigationDestination(icon: Icon(Icons.event_note_outlined),        selectedIcon: Icon(Icons.event_note_rounded),          label: 'Leaves'),
+        NavigationDestination(icon: Icon(Icons.bar_chart_outlined),         selectedIcon: Icon(Icons.bar_chart_rounded),           label: 'Reports'),
+        NavigationDestination(icon: Icon(Icons.dashboard_outlined),         selectedIcon: Icon(Icons.dashboard_rounded),           label: 'Dashboard'),
+        NavigationDestination(icon: Icon(Icons.settings_outlined),          selectedIcon: Icon(Icons.settings_rounded),            label: 'Settings'),
+      ];
+    }
+
+    // ── MANAGEMENT ────────────────────────────────────────────────────────────
+    // 0=Home  1=Projects  2=Employees  3=Clients  4=Attendance
+    // 5=Leaves  6=Reports  7=Dashboard  8=Settings
+    if (user.isManagement) {
+      return const [
+        NavigationDestination(icon: Icon(Icons.home_outlined),              selectedIcon: Icon(Icons.home_rounded),                label: 'Home'),
+        NavigationDestination(icon: Icon(Icons.business_center_outlined),   selectedIcon: Icon(Icons.business_center_rounded),     label: 'Projects'),
+        NavigationDestination(icon: Icon(Icons.people_outline_rounded),     selectedIcon: Icon(Icons.people_rounded),              label: 'Employees'),
+        NavigationDestination(icon: Icon(Icons.business_outlined),          selectedIcon: Icon(Icons.business_rounded),            label: 'Clients'),
+        NavigationDestination(icon: Icon(Icons.access_time_outlined),       selectedIcon: Icon(Icons.access_time_filled_rounded),  label: 'Attendance'),
+        NavigationDestination(icon: Icon(Icons.event_note_outlined),        selectedIcon: Icon(Icons.event_note_rounded),          label: 'Leaves'),
+        NavigationDestination(icon: Icon(Icons.bar_chart_outlined),         selectedIcon: Icon(Icons.bar_chart_rounded),           label: 'Reports'),
+        NavigationDestination(icon: Icon(Icons.dashboard_outlined),         selectedIcon: Icon(Icons.dashboard_rounded),           label: 'Dashboard'),
+        NavigationDestination(icon: Icon(Icons.settings_outlined),          selectedIcon: Icon(Icons.settings_rounded),            label: 'Settings'),
+      ];
+    }
+
+    // ── TEAM LEADER / ENGINEER ────────────────────────────────────────────────
+    // 0=Home  1=Projects  2=MyTasks  3=Attendance  4=Leaves  5=Reports  6=Settings
+    if (user.isTeamLeader || user.isEngineer) {
+      return const [
+        NavigationDestination(icon: Icon(Icons.home_outlined),              selectedIcon: Icon(Icons.home_rounded),                label: 'Home'),
+        NavigationDestination(icon: Icon(Icons.business_center_outlined),   selectedIcon: Icon(Icons.business_center_rounded),     label: 'Projects'),
+        NavigationDestination(icon: Icon(Icons.task_outlined),              selectedIcon: Icon(Icons.task_rounded),                label: 'My Tasks'),
+        NavigationDestination(icon: Icon(Icons.access_time_outlined),       selectedIcon: Icon(Icons.access_time_filled_rounded),  label: 'Attendance'),
+        NavigationDestination(icon: Icon(Icons.event_note_outlined),        selectedIcon: Icon(Icons.event_note_rounded),          label: 'Leaves'),
+        NavigationDestination(icon: Icon(Icons.bar_chart_outlined),         selectedIcon: Icon(Icons.bar_chart_rounded),           label: 'Reports'),
+        NavigationDestination(icon: Icon(Icons.settings_outlined),          selectedIcon: Icon(Icons.settings_rounded),            label: 'Settings'),
+      ];
+    }
+
+    // ── DC ────────────────────────────────────────────────────────────────────
+    // 0=Home  1=Projects  2=MyTasks  3=Attendance  4=Leaves  5=Reports  6=Settings
     if (user.isDC) {
-      items.addAll([
-        const NavigationDestination(
-          icon: Icon(Icons.task_outlined),
-          selectedIcon: Icon(Icons.task_rounded),
-          label: 'My Tasks',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.access_time_outlined),
-          selectedIcon: Icon(Icons.access_time_filled_rounded),
-          label: 'Attendance',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.bar_chart_outlined),
-          selectedIcon: Icon(Icons.bar_chart_rounded),
-          label: 'Reports',
-        ),
-      ]);
+      return const [
+        NavigationDestination(icon: Icon(Icons.home_outlined),              selectedIcon: Icon(Icons.home_rounded),                label: 'Home'),
+        NavigationDestination(icon: Icon(Icons.business_center_outlined),   selectedIcon: Icon(Icons.business_center_rounded),     label: 'Projects'),
+        NavigationDestination(icon: Icon(Icons.task_outlined),              selectedIcon: Icon(Icons.task_rounded),                label: 'My Tasks'),
+        NavigationDestination(icon: Icon(Icons.access_time_outlined),       selectedIcon: Icon(Icons.access_time_filled_rounded),  label: 'Attendance'),
+        NavigationDestination(icon: Icon(Icons.event_note_outlined),        selectedIcon: Icon(Icons.event_note_rounded),          label: 'Leaves'),
+        NavigationDestination(icon: Icon(Icons.bar_chart_outlined),         selectedIcon: Icon(Icons.bar_chart_rounded),           label: 'Reports'),
+        NavigationDestination(icon: Icon(Icons.settings_outlined),          selectedIcon: Icon(Icons.settings_rounded),            label: 'Settings'),
+      ];
     }
 
-    items.add(
-      const NavigationDestination(
-        icon: Icon(Icons.settings_outlined),
-        selectedIcon: Icon(Icons.settings_rounded),
-        label: 'Settings',
-      ),
-    );
-
-    return items;
+    // Fallback
+    return const [
+      NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings_rounded), label: 'Settings'),
+    ];
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // _getBody — index MUST match _getNavItems order exactly for each role.
+  // ─────────────────────────────────────────────────────────────────────────
   Widget _getBody(UserModel user, int index) {
+
+    // ── CLIENT ───────────────────────────────────────────────────────────────
+    // 0=MyProjects  1=Settings
     if (user.isClient) {
-      if (index == 0) return const ClientScreen();
-      return const SettingsScreen();
+      switch (index) {
+        case 0:  return const ClientScreen();
+        default: return const SettingsScreen();
+      }
     }
 
+    // ── ADMINISTRATION ────────────────────────────────────────────────────────
+    // 0=Attendance  1=Leaves  2=Settings
     if (user.isAdministration) {
-      if (index == 0) return const AttendanceScreen();
-      return const SettingsScreen();
+      switch (index) {
+        case 0:  return const AttendanceScreen();
+        case 1:  return const LeavesScreen();
+        default: return const SettingsScreen();
+      }
     }
 
-    if (index == 0) return _DashboardTab(user: user);
-    if (index == 1) return const ProjectsScreen();
-
-    if (user.isAdmin) {
-      if (index == 2) return const EmployeesScreen();
-      if (index == 3) return const ClientsScreen();
-      if (index == 4) return const AttendanceScreen();
-      if (index == 5) return const ReportsScreen();
-      if (index == 6) return const ManagementDashboardScreen();
-      return const SettingsScreen();
-    }
-
-    if (user.isManagement) {
-      if (index == 2) return const MyTasksScreen();
-      if (index == 3) return const AttendanceScreen();
-      if (index == 4) return const ReportsScreen();
-      if (index == 5) return const ManagementDashboardScreen();
-      return const SettingsScreen();
-    }
-
-    if (user.isTeamLeader || user.isEngineer) {
-      if (index == 2) return const MyTasksScreen();
-      if (index == 3) return const AttendanceScreen();
-      if (index == 4) return const ReportsScreen();
-      return const SettingsScreen();
-    }
-
+    // ── REVIEWER ──────────────────────────────────────────────────────────────
+    // 0=Home  1=Projects  2=MyTasks  3=Attendance  4=Leaves  5=Reports  6=Settings
     if (user.isReviewer) {
-      if (index == 2) return const MyTasksScreen();
-      if (index == 3) return const ReportsScreen();
-      return const SettingsScreen();
+      switch (index) {
+        case 0:  return _DashboardTab(user: user);
+        case 1:  return const ProjectsScreen();
+        case 2:  return const MyTasksScreen();
+        case 3:  return const AttendanceScreen();
+        case 4:  return const LeavesScreen();
+        case 5:  return const ReportsScreen();
+        default: return const SettingsScreen();
+      }
     }
 
+    // ── ADMIN ─────────────────────────────────────────────────────────────────
+    // 0=Home  1=Projects  2=Employees  3=Clients  4=Attendance
+    // 5=Leaves  6=Reports  7=Dashboard  8=Settings
+    if (user.isAdmin) {
+      switch (index) {
+        case 0:  return _DashboardTab(user: user);
+        case 1:  return const ProjectsScreen();
+        case 2:  return const EmployeesScreen();
+        case 3:  return const ClientsScreen();
+        case 4:  return const AttendanceScreen();
+        case 5:  return const LeavesScreen();
+        case 6:  return const ReportsScreen();
+        case 7:  return const ManagementDashboardScreen();
+        default: return const SettingsScreen();
+      }
+    }
+
+    // ── MANAGEMENT ────────────────────────────────────────────────────────────
+    // 0=Home  1=Projects  2=Employees  3=Clients  4=Attendance
+    // 5=Leaves  6=Reports  7=Dashboard  8=Settings
+    if (user.isManagement) {
+      switch (index) {
+        case 0:  return _DashboardTab(user: user);
+        case 1:  return const ProjectsScreen();
+        case 2:  return const EmployeesScreen();
+        case 3:  return const ClientsScreen();
+        case 4:  return const AttendanceScreen();
+        case 5:  return const LeavesScreen();
+        case 6:  return const ReportsScreen();
+        case 7:  return const ManagementDashboardScreen();
+        default: return const SettingsScreen();
+      }
+    }
+
+    // ── TEAM LEADER / ENGINEER ────────────────────────────────────────────────
+    // 0=Home  1=Projects  2=MyTasks  3=Attendance  4=Leaves  5=Reports  6=Settings
+    if (user.isTeamLeader || user.isEngineer) {
+      switch (index) {
+        case 0:  return _DashboardTab(user: user);
+        case 1:  return const ProjectsScreen();
+        case 2:  return const MyTasksScreen();
+        case 3:  return const AttendanceScreen();
+        case 4:  return const LeavesScreen();
+        case 5:  return const ReportsScreen();
+        default: return const SettingsScreen();
+      }
+    }
+
+    // ── DC ────────────────────────────────────────────────────────────────────
+    // 0=Home  1=Projects  2=DCTasks  3=Attendance  4=Leaves  5=Reports  6=Settings
     if (user.isDC) {
-      if (index == 2) return const DCTasksScreen();
-      if (index == 3) return const AttendanceScreen();
-      if (index == 4) return const ReportsScreen();
-      return const SettingsScreen();
+      switch (index) {
+        case 0:  return _DashboardTab(user: user);
+        case 1:  return const ProjectsScreen();
+        case 2:  return const DCTasksScreen();
+        case 3:  return const AttendanceScreen();
+        case 4:  return const LeavesScreen();
+        case 5:  return const ReportsScreen();
+        default: return const SettingsScreen();
+      }
     }
 
     return const SettingsScreen();

@@ -6,6 +6,8 @@ import '../../../../features/home/data/models/user_model.dart';
 import '../controllers/employee_providers.dart';
 import '../../../../features/home/presentation/controllers/home_providers.dart';
 import '../../../office/presentation/controllers/office_settings_providers.dart';
+import '../../../office/presentation/controllers/hr_policy_providers.dart';
+import '../../../office/data/models/hr_policy_model.dart';
 import '../../../client/data/models/client_model.dart';
 import '../../../client/data/client_repository.dart';
 
@@ -53,6 +55,15 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
   String _jobTitleKey = '';
   bool _adminFlag = false;
   DateTime _joinDate = DateTime.now();
+
+  // ── Schedule & Leave Settings ──────────────────────────────────────────────
+  int _annualLeaveDays = 21;
+  bool _hasCustomSchedule = false;
+  List<String> _customWorkDays = HRPolicyModel.kDefaultWorkDays.toList();
+  TimeOfDay _customStartTime = const TimeOfDay(hour: 8, minute: 0);
+  TimeOfDay _customEndTime = const TimeOfDay(hour: 16, minute: 30);
+  List<_DayOverrideEntry> _dayOverrides = [];
+  bool _exemptFromRules = false;
 
   bool get _isEditing => widget.employee != null;
   bool get _isClientMode =>
@@ -109,6 +120,33 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
       _jobTitleKey = e.jobTitle;
       _adminFlag = e.adminFlag;
       _linkedClientId = e.linkedClientId;
+      // Schedule
+      _annualLeaveDays = e.annualLeaveDays;
+      _hasCustomSchedule = e.hasCustomSchedule;
+      _customWorkDays = List<String>.from(e.customWorkDays.isNotEmpty
+          ? e.customWorkDays
+          : HRPolicyModel.kDefaultWorkDays);
+      _exemptFromRules = e.exemptFromRules;
+      if (e.customStartTime.isNotEmpty) {
+        final p = e.customStartTime.split(':');
+        _customStartTime = TimeOfDay(
+            hour: int.tryParse(p[0]) ?? 8,
+            minute: p.length > 1 ? (int.tryParse(p[1]) ?? 0) : 0);
+      }
+      if (e.customEndTime.isNotEmpty) {
+        final p = e.customEndTime.split(':');
+        _customEndTime = TimeOfDay(
+            hour: int.tryParse(p[0]) ?? 16,
+            minute: p.length > 1 ? (int.tryParse(p[1]) ?? 30) : 30);
+      }
+      _dayOverrides = e.dayOverrides.entries.map((entry) {
+        final v = entry.value;
+        return _DayOverrideEntry(
+          day: entry.key,
+          start: v['start'] ?? '08:00',
+          end: v['end'] ?? '16:30',
+        );
+      }).toList();
     } else {
       _role = widget.initialRole ?? 'engineer';
       _linkedClientId = widget.initialLinkedClientId;
@@ -122,6 +160,13 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
 
         if (mounted && _employeeCodeController.text.isEmpty) {
           setState(() => _employeeCodeController.text = code);
+        }
+
+        // Load default annual leave from HR policy
+        final policy = await ref.read(hrPolicyRepositoryProvider)
+            .getPolicy(user.officeId);
+        if (mounted) {
+          setState(() => _annualLeaveDays = policy.annualLeaveDays);
         }
       });
     }
@@ -171,6 +216,7 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
 
       final repo = ref.read(employeeRepositoryProvider);
 
+      final scheduleData = _buildScheduleData();
       if (_isEditing) {
         await repo.updateEmployee(widget.employee!.uid, {
           'name': _nameController.text.trim(),
@@ -188,9 +234,10 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
           'isActive': _status == 'active',
           'notes': _notesController.text.trim(),
           'linkedClientId': _role == 'client' ? _linkedClientId : null,
+          ...scheduleData,
         });
       } else {
-        await repo.addEmployee(
+        final uid = await repo.addEmployee(
           officeId: user.officeId,
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
@@ -209,6 +256,10 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
           notes: _notesController.text.trim(),
           linkedClientId: _role == 'client' ? _linkedClientId : null,
         );
+        // Write schedule fields after user created
+        if (uid != null) {
+          await repo.updateEmployee(uid, scheduleData);
+        }
       }
 
       if (mounted) {
@@ -222,6 +273,25 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String _fmtTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  Map<String, dynamic> _buildScheduleData() {
+    final overridesMap = <String, Map<String, String>>{};
+    for (final e in _dayOverrides) {
+      overridesMap[e.day] = {'start': e.start, 'end': e.end};
+    }
+    return {
+      'annualLeaveDays': _annualLeaveDays,
+      'hasCustomSchedule': _hasCustomSchedule,
+      'customWorkDays': _hasCustomSchedule ? _customWorkDays : [],
+      'customStartTime': _hasCustomSchedule ? _fmtTime(_customStartTime) : '',
+      'customEndTime': _hasCustomSchedule ? _fmtTime(_customEndTime) : '',
+      'dayOverrides': overridesMap,
+      'exemptFromRules': _exemptFromRules,
+    };
   }
 
   @override
@@ -437,6 +507,27 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
               label: 'Notes',
               icon: Icons.notes_outlined,
               maxLines: 3,
+            ),
+            const SizedBox(height: 24),
+
+            // ── Schedule & Leave Settings ──────────────────────────────
+            _SectionTitle(title: 'Schedule & Leave Settings'),
+            const SizedBox(height: 12),
+            _ScheduleSection(
+              annualLeaveDays: _annualLeaveDays,
+              hasCustomSchedule: _hasCustomSchedule,
+              customWorkDays: _customWorkDays,
+              customStartTime: _customStartTime,
+              customEndTime: _customEndTime,
+              dayOverrides: _dayOverrides,
+              exemptFromRules: _exemptFromRules,
+              onAnnualLeaveDaysChanged: (v) => setState(() => _annualLeaveDays = v),
+              onHasCustomScheduleChanged: (v) => setState(() => _hasCustomSchedule = v),
+              onCustomWorkDaysChanged: (v) => setState(() => _customWorkDays = v),
+              onCustomStartTimeChanged: (v) => setState(() => _customStartTime = v),
+              onCustomEndTimeChanged: (v) => setState(() => _customEndTime = v),
+              onDayOverridesChanged: (v) => setState(() => _dayOverrides = v),
+              onExemptFromRulesChanged: (v) => setState(() => _exemptFromRules = v),
             ),
             const SizedBox(height: 32),
 
@@ -1079,6 +1170,626 @@ class _SectionTitle extends StatelessWidget {
     );
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Schedule Section
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _DayOverrideEntry {
+  final String day;
+  final String start;
+  final String end;
+  const _DayOverrideEntry({required this.day, required this.start, required this.end});
+  _DayOverrideEntry copyWith({String? start, String? end}) =>
+      _DayOverrideEntry(day: day, start: start ?? this.start, end: end ?? this.end);
+}
+
+class _ScheduleSection extends StatelessWidget {
+  final int annualLeaveDays;
+  final bool hasCustomSchedule;
+  final List<String> customWorkDays;
+  final TimeOfDay customStartTime;
+  final TimeOfDay customEndTime;
+  final List<_DayOverrideEntry> dayOverrides;
+  final bool exemptFromRules;
+
+  final ValueChanged<int> onAnnualLeaveDaysChanged;
+  final ValueChanged<bool> onHasCustomScheduleChanged;
+  final ValueChanged<List<String>> onCustomWorkDaysChanged;
+  final ValueChanged<TimeOfDay> onCustomStartTimeChanged;
+  final ValueChanged<TimeOfDay> onCustomEndTimeChanged;
+  final ValueChanged<List<_DayOverrideEntry>> onDayOverridesChanged;
+  final ValueChanged<bool> onExemptFromRulesChanged;
+
+  const _ScheduleSection({
+    required this.annualLeaveDays,
+    required this.hasCustomSchedule,
+    required this.customWorkDays,
+    required this.customStartTime,
+    required this.customEndTime,
+    required this.dayOverrides,
+    required this.exemptFromRules,
+    required this.onAnnualLeaveDaysChanged,
+    required this.onHasCustomScheduleChanged,
+    required this.onCustomWorkDaysChanged,
+    required this.onCustomStartTimeChanged,
+    required this.onCustomEndTimeChanged,
+    required this.onDayOverridesChanged,
+    required this.onExemptFromRulesChanged,
+  });
+
+  String _fmt(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  TimeOfDay _parseStr(String s) {
+    final p = s.split(':');
+    return TimeOfDay(
+      hour: int.tryParse(p[0]) ?? 8,
+      minute: p.length > 1 ? (int.tryParse(p[1]) ?? 0) : 0,
+    );
+  }
+
+  Future<void> _pickTime(
+    BuildContext context,
+    TimeOfDay initial,
+    ValueChanged<TimeOfDay> onPicked,
+  ) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
+    );
+    if (picked != null) onPicked(picked);
+  }
+
+  void _toggleDay(String day) {
+    final updated = List<String>.from(customWorkDays);
+    if (updated.contains(day)) {
+      updated.remove(day);
+    } else {
+      updated.add(day);
+    }
+    onCustomWorkDaysChanged(updated);
+  }
+
+  Future<void> _editDayOverride(BuildContext context, String day) async {
+    final existing = dayOverrides.firstWhere(
+      (e) => e.day == day,
+      orElse: () => _DayOverrideEntry(day: day, start: _fmt(customStartTime), end: _fmt(customEndTime)),
+    );
+
+    TimeOfDay start = _parseStr(existing.start);
+    TimeOfDay end = _parseStr(existing.end);
+
+    final cs = Theme.of(context).colorScheme;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) {
+          return AlertDialog(
+            title: Text('Override: ${HRPolicyModel.kDayLabels[day] ?? day}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Set custom start/end time for this day only.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _TimePickerTile(
+                        label: 'Start',
+                        time: start,
+                        color: Colors.green,
+                        onTap: () async {
+                          final p = await showTimePicker(
+                            context: ctx,
+                            initialTime: start,
+                            builder: (context, child) => MediaQuery(
+                              data: MediaQuery.of(context)
+                                  .copyWith(alwaysUse24HourFormat: true),
+                              child: child!,
+                            ),
+                          );
+                          if (p != null) setDlgState(() => start = p);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _TimePickerTile(
+                        label: 'End',
+                        time: end,
+                        color: cs.primary,
+                        onTap: () async {
+                          final p = await showTimePicker(
+                            context: ctx,
+                            initialTime: end,
+                            builder: (context, child) => MediaQuery(
+                              data: MediaQuery.of(context)
+                                  .copyWith(alwaysUse24HourFormat: true),
+                              child: child!,
+                            ),
+                          );
+                          if (p != null) setDlgState(() => end = p);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  final updated = List<_DayOverrideEntry>.from(dayOverrides)
+                    ..removeWhere((e) => e.day == day);
+                  onDayOverridesChanged(updated);
+                  Navigator.pop(ctx);
+                },
+                child: Text('Remove Override',
+                    style: TextStyle(color: cs.error)),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final updated = List<_DayOverrideEntry>.from(dayOverrides)
+                    ..removeWhere((e) => e.day == day);
+                  updated.add(_DayOverrideEntry(
+                    day: day,
+                    start: _fmt(start),
+                    end: _fmt(end),
+                  ));
+                  onDayOverridesChanged(updated);
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Annual Leave Days ──────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.beach_access_rounded, color: cs.primary, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Annual Leave Days',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      'Override the office HR policy default',
+                      style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.5)),
+                    ),
+                  ],
+                ),
+              ),
+              // Stepper
+              Row(
+                children: [
+                  _StepBtn(
+                    icon: Icons.remove,
+                    color: cs.primary,
+                    onTap: annualLeaveDays > 0
+                        ? () => onAnnualLeaveDaysChanged(annualLeaveDays - 1)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 44,
+                    alignment: Alignment.center,
+                    child: Text(
+                      '$annualLeaveDays',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: cs.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _StepBtn(
+                    icon: Icons.add,
+                    color: cs.primary,
+                    onTap: () => onAnnualLeaveDaysChanged(annualLeaveDays + 1),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Exempt from Rules ──────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: exemptFromRules
+                ? Colors.orange.withOpacity(0.08)
+                : cs.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: exemptFromRules
+                  ? Colors.orange.withOpacity(0.4)
+                  : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.rule_folder_outlined,
+                color: exemptFromRules ? Colors.orange : cs.onSurface.withOpacity(0.5),
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Exempt from Attendance Rules',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: exemptFromRules ? Colors.orange : cs.onSurface,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      'Late, permission & absence rules not applied',
+                      style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.5)),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: exemptFromRules,
+                onChanged: onExemptFromRulesChanged,
+                activeColor: Colors.orange,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Custom Schedule Toggle ─────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: hasCustomSchedule
+                ? cs.primary.withOpacity(0.08)
+                : cs.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: hasCustomSchedule
+                  ? cs.primary.withOpacity(0.4)
+                  : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.schedule_rounded,
+                color: hasCustomSchedule ? cs.primary : cs.onSurface.withOpacity(0.5),
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Custom Work Schedule',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: hasCustomSchedule ? cs.primary : cs.onSurface,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      'Override the office default schedule',
+                      style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.5)),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: hasCustomSchedule,
+                onChanged: onHasCustomScheduleChanged,
+              ),
+            ],
+          ),
+        ),
+
+        // ── Custom Schedule Details ────────────────────────────────────────
+        if (hasCustomSchedule) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cs.primary.withOpacity(0.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Work Days
+                Text(
+                  'Work Days',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface.withOpacity(0.6),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: HRPolicyModel.kAllDays.map((day) {
+                    final selected = customWorkDays.contains(day);
+                    return GestureDetector(
+                      onTap: () => _toggleDay(day),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? cs.primary.withOpacity(0.15)
+                              : cs.surface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: selected ? cs.primary : cs.onSurface.withOpacity(0.2),
+                            width: selected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Text(
+                          HRPolicyModel.kDayLabels[day] ?? day,
+                          style: TextStyle(
+                            color: selected ? cs.primary : cs.onSurface.withOpacity(0.6),
+                            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+
+                // Work Hours
+                Text(
+                  'Work Hours',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface.withOpacity(0.6),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _TimePickerTile(
+                        label: 'Start Time',
+                        time: customStartTime,
+                        color: Colors.green,
+                        onTap: () => _pickTime(context, customStartTime, onCustomStartTimeChanged),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _TimePickerTile(
+                        label: 'End Time',
+                        time: customEndTime,
+                        color: cs.primary,
+                        onTap: () => _pickTime(context, customEndTime, onCustomEndTimeChanged),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Day Overrides
+                Row(
+                  children: [
+                    Text(
+                      'Day-Specific Overrides',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'optional',
+                        style: TextStyle(fontSize: 10, color: cs.primary),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Set different hours for specific days (e.g. Fri shorter hours)',
+                  style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.45)),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: customWorkDays.map((day) {
+                    final override = dayOverrides.firstWhere(
+                      (e) => e.day == day,
+                      orElse: () => _DayOverrideEntry(day: day, start: '', end: ''),
+                    );
+                    final hasOverride = override.start.isNotEmpty;
+                    return GestureDetector(
+                      onTap: () => _editDayOverride(context, day),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: hasOverride
+                              ? Colors.amber.withOpacity(0.12)
+                              : cs.surface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: hasOverride
+                                ? Colors.amber.withOpacity(0.5)
+                                : cs.onSurface.withOpacity(0.2),
+                            width: hasOverride ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              HRPolicyModel.kDayLabels[day] ?? day,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: hasOverride ? Colors.amber.shade700 : cs.onSurface.withOpacity(0.6),
+                              ),
+                            ),
+                            if (hasOverride) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                '${override.start}–${override.end}',
+                                style: TextStyle(fontSize: 10, color: Colors.amber.shade600),
+                              ),
+                            ] else ...[
+                              const SizedBox(height: 2),
+                              Icon(Icons.add, size: 12, color: cs.onSurface.withOpacity(0.4)),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _StepBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+  const _StepBtn({required this.icon, required this.color, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: onTap != null ? color.withOpacity(0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(onTap != null ? 0.4 : 0.15)),
+        ),
+        child: Icon(icon, size: 16, color: onTap != null ? color : color.withOpacity(0.3)),
+      ),
+    );
+  }
+}
+
+class _TimePickerTile extends StatelessWidget {
+  final String label;
+  final TimeOfDay time;
+  final Color color;
+  final VoidCallback onTap;
+  const _TimePickerTile({
+    required this.label,
+    required this.time,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.access_time_rounded, color: color, size: 12),
+                const SizedBox(width: 4),
+                Text(label, style: TextStyle(color: color.withOpacity(0.8), fontSize: 11)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+              style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            Text('Tap to change', style: TextStyle(color: color.withOpacity(0.5), fontSize: 10)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 
 class _DateField extends StatelessWidget {
   final String label;

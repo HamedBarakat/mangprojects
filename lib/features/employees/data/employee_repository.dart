@@ -40,7 +40,7 @@ class EmployeeRepository {
     return EmployeeModel.fromFirestore(doc);
   }
 
-  Future<void> addEmployee({
+  Future<String?> addEmployee({
     required String officeId,
     required String email,
     required String password,
@@ -99,6 +99,7 @@ class EmployeeRepository {
       });
 
       await secondaryAuth.signOut();
+      return uid;
     } finally {
       await secondaryApp.delete();
     }

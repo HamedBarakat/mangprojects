@@ -18,6 +18,15 @@ class UserModel {
   final String? notes;
   final double rating;
 
+  // ── Schedule & Leave Settings ──────────────────────────────────────────────
+  final int annualLeaveDays;
+  final bool hasCustomSchedule;
+  final List<String> customWorkDays;
+  final String customStartTime;
+  final String customEndTime;
+  final Map<String, Map<String, String>> dayOverrides;
+  final bool exemptFromRules;
+
   const UserModel({
     required this.uid,
     required this.officeId,
@@ -35,6 +44,13 @@ class UserModel {
     this.linkedClientId,
     this.notes,
     this.rating = 0,
+    this.annualLeaveDays = 21,
+    this.hasCustomSchedule = false,
+    this.customWorkDays = const [],
+    this.customStartTime = '',
+    this.customEndTime = '',
+    this.dayOverrides = const {},
+    this.exemptFromRules = false,
   });
 
   // ── Role flags ─────────────────────────────────────────────────────────────
@@ -134,7 +150,20 @@ class UserModel {
       linkedClientId: d['linkedClientId'],
       notes:        d['notes'],
       rating:       ((d['rating'] ?? 0) as num).toDouble(),
+      annualLeaveDays: (d['annualLeaveDays'] as num?)?.toInt() ?? 21,
+      hasCustomSchedule: d['hasCustomSchedule'] as bool? ?? false,
+      customWorkDays: List<String>.from(d['customWorkDays'] ?? []),
+      customStartTime: d['customStartTime'] as String? ?? '',
+      customEndTime: d['customEndTime'] as String? ?? '',
+      dayOverrides: _parseDayOverrides(d['dayOverrides']),
+      exemptFromRules: d['exemptFromRules'] as bool? ?? false,
     );
+  }
+
+  static Map<String, Map<String, String>> _parseDayOverrides(dynamic raw) {
+    if (raw == null) return {};
+    final m = raw as Map<String, dynamic>;
+    return m.map((k, v) => MapEntry(k, Map<String, String>.from(v as Map)));
   }
 
   Map<String, dynamic> toFirestore() => {
@@ -154,6 +183,13 @@ class UserModel {
     'linkedClientId': linkedClientId,
     'notes':        notes ?? '',
     'rating':       rating,
+    'annualLeaveDays': annualLeaveDays,
+    'hasCustomSchedule': hasCustomSchedule,
+    'customWorkDays': customWorkDays,
+    'customStartTime': customStartTime,
+    'customEndTime': customEndTime,
+    'dayOverrides': dayOverrides,
+    'exemptFromRules': exemptFromRules,
   };
 }
 

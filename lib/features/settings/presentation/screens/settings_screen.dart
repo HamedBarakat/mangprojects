@@ -11,8 +11,10 @@ import '../../../../features/projects/presentation/controllers/task_providers.da
 import '../../../../features/employees/presentation/controllers/employee_providers.dart';
 import '../../../../features/notifications/presentation/controllers/notification_providers.dart';
 import '../../../../features/office/presentation/controllers/office_settings_providers.dart';
+import '../../../../features/office/presentation/controllers/hr_policy_providers.dart';
 import '../../../../features/office/data/models/office_model.dart';
 import '../../../../features/office/data/models/office_settings_model.dart';
+import '../../../../features/office/data/models/hr_policy_model.dart';
 import '../../../office/presentation/screens/office_lists_screen.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/theme_provider.dart';
@@ -83,6 +85,10 @@ class SettingsScreen extends ConsumerWidget {
                   ref: ref,
                 ),
               ),
+              const SizedBox(height: 10),
+
+              const SizedBox(height: 10),
+              _HrPolicyCard(officeId: user?.officeId ?? ''),
               const SizedBox(height: 10),
 
               _SettingsTile(
@@ -1298,6 +1304,370 @@ class _AppearanceSection extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HR Policy Card
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _HrPolicyCard extends ConsumerStatefulWidget {
+  final String officeId;
+  const _HrPolicyCard({required this.officeId});
+
+  @override
+  ConsumerState<_HrPolicyCard> createState() => _HrPolicyCardState();
+}
+
+class _HrPolicyCardState extends ConsumerState<_HrPolicyCard> {
+  bool _initialized = false;
+  bool _saving = false;
+
+  List<String> _workDays = HRPolicyModel.kDefaultWorkDays.toList();
+  TimeOfDay _startTime = const TimeOfDay(hour: 8, minute: 0);
+  TimeOfDay _endTime = const TimeOfDay(hour: 16, minute: 30);
+  final _lateGraceCtrl = TextEditingController(text: '5.0');
+  final _permissionCtrl = TextEditingController(text: '5.0');
+  final _annualLeaveCtrl = TextEditingController(text: '21');
+
+  @override
+  void dispose() {
+    _lateGraceCtrl.dispose();
+    _permissionCtrl.dispose();
+    _annualLeaveCtrl.dispose();
+    super.dispose();
+  }
+
+  void _initFromPolicy(HRPolicyModel p) {
+    _workDays = List<String>.from(p.workDays);
+    _startTime = TimeOfDay(hour: p.startHour, minute: p.startMinute);
+    _endTime = TimeOfDay(hour: p.endHour, minute: p.endMinute);
+    _lateGraceCtrl.text = p.lateGraceHoursPerMonth.toStringAsFixed(1);
+    _permissionCtrl.text = p.permissionHoursPerMonth.toStringAsFixed(1);
+    _annualLeaveCtrl.text = p.annualLeaveDays.toString();
+    _initialized = true;
+  }
+
+  Future<void> _save() async {
+    if (widget.officeId.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      final policy = HRPolicyModel(
+        workDays: _workDays,
+        workStartTime:
+            '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}',
+        workEndTime:
+            '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}',
+        lateGraceHoursPerMonth:
+            double.tryParse(_lateGraceCtrl.text.trim()) ?? 5.0,
+        permissionHoursPerMonth:
+            double.tryParse(_permissionCtrl.text.trim()) ?? 5.0,
+        annualLeaveDays: int.tryParse(_annualLeaveCtrl.text.trim()) ?? 21,
+      );
+      await ref
+          .read(hrPolicyRepositoryProvider)
+          .savePolicy(widget.officeId, policy);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('HR Policy saved ✓'),
+              behavior: SnackBarBehavior.floating),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _pickTime(bool isStart) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: isStart ? _startTime : _endTime,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        if (isStart) _startTime = picked;
+        else _endTime = picked;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final policyAsync = ref.watch(hrPolicyProvider);
+    policyAsync.whenData((policy) {
+      if (!_initialized) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_initialized) setState(() => _initFromPolicy(policy));
+        });
+      }
+    });
+
+    if (!_initialized) {
+      return Container(
+        height: 60,
+        decoration: AppDecorations.cardOf(context),
+        child: const Center(
+            child: CircularProgressIndicator(color: AppColors.cyan500)),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: AppDecorations.cardOf(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header ──────────────────────────────────────────────────────
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.policy_outlined,
+                    color: AppColors.warning, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'HR Policy',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: AppColors.slate100),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(height: 1, color: AppColors.slate700),
+          const SizedBox(height: 16),
+
+          // ── Work Days ────────────────────────────────────────────────────
+          const Text('Work Days',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.slate400,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: HRPolicyModel.kAllDays.map((day) {
+              final selected = _workDays.contains(day);
+              return GestureDetector(
+                onTap: () => setState(() {
+                  if (selected) _workDays.remove(day);
+                  else _workDays.add(day);
+                }),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? AppColors.cyan500.withOpacity(0.15)
+                        : AppColors.slate800,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: selected
+                          ? AppColors.cyan500
+                          : AppColors.slate600,
+                      width: selected ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Text(
+                    HRPolicyModel.kDayLabels[day] ?? day,
+                    style: TextStyle(
+                      color: selected
+                          ? AppColors.cyan400
+                          : AppColors.slate400,
+                      fontWeight: selected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Work Hours ───────────────────────────────────────────────────
+          const Text('Work Hours',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.slate400,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _TimePicker(
+                  label: 'Start Time',
+                  icon: Icons.login_rounded,
+                  time: _startTime,
+                  color: AppColors.success,
+                  onTap: () => _pickTime(true),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _TimePicker(
+                  label: 'End Time',
+                  icon: Icons.logout_rounded,
+                  time: _endTime,
+                  color: AppColors.cyan500,
+                  onTap: () => _pickTime(false),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // ── Policy Numbers ───────────────────────────────────────────────
+          const Text('Leave & Attendance Policy',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.slate400,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          _PolicyNumberField(
+            ctrl: _lateGraceCtrl,
+            label: 'Late Grace Hours / Month',
+            subtitle: 'Free late arrivals without deduction',
+            icon: Icons.watch_later_outlined,
+            color: AppColors.warning,
+          ),
+          const SizedBox(height: 10),
+          _PolicyNumberField(
+            ctrl: _permissionCtrl,
+            label: 'Permission Hours / Month',
+            subtitle: 'Pre-approved hours off during work',
+            icon: Icons.exit_to_app_rounded,
+            color: AppColors.info,
+          ),
+          const SizedBox(height: 10),
+          _PolicyNumberField(
+            ctrl: _annualLeaveCtrl,
+            label: 'Annual Leave Days',
+            subtitle: 'Default for new employees',
+            icon: Icons.beach_access_rounded,
+            color: AppColors.success,
+            isInt: true,
+          ),
+          const SizedBox(height: 16),
+
+          // ── Save ─────────────────────────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _saving ? null : _save,
+              icon: _saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.save_rounded, size: 18),
+              label: Text(_saving ? 'Saving...' : 'Save HR Policy'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PolicyNumberField extends StatelessWidget {
+  final TextEditingController ctrl;
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final bool isInt;
+  const _PolicyNumberField({
+    required this.ctrl,
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    this.isInt = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.slate800,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.slate700),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.slate200,
+                        fontWeight: FontWeight.w500)),
+                Text(subtitle,
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.slate500)),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 72,
+            child: TextField(
+              controller: ctrl,
+              textAlign: TextAlign.center,
+              keyboardType:
+                  TextInputType.numberWithOptions(decimal: !isInt),
+              style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16),
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 10),
+                filled: true,
+                fillColor: color.withOpacity(0.08),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

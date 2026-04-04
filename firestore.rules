@@ -178,10 +178,16 @@ service cloud.firestore {
 
     // ── Attendance ───────────────────────────────────────────────────────────
     match /attendance/{docId} {
+      // Fast-path: own record (no currentUser() lookup needed for streams)
       allow read: if isSignedIn() && (
-        belongsToOffice(resource.data.officeId) || canSeeAll()
+        resource.data.employeeId == request.auth.uid ||
+        belongsToOffice(resource.data.officeId) ||
+        canSeeAll()
       );
-      allow write: if isSignedIn() && belongsToOffice(request.resource.data.officeId);
+      allow write: if isSignedIn() && (
+        request.resource.data.employeeId == request.auth.uid ||
+        belongsToOffice(request.resource.data.officeId)
+      );
     }
 
     // ── Daily Logs ───────────────────────────────────────────────────────────
@@ -194,6 +200,29 @@ service cloud.firestore {
     match /overtime_requests/{docId} {
       allow read: if isSignedIn() && belongsToOffice(resource.data.officeId);
       allow write: if isSignedIn() && belongsToOffice(request.resource.data.officeId);
+    }
+
+    // ── Leave Requests ───────────────────────────────────────────────────────
+    match /leave_requests/{docId} {
+      // Employee can read their own requests; admin/management can read all in office
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == request.auth.uid ||
+        (isAdmin() && belongsToOffice(resource.data.officeId)) ||
+        (isManagement() && belongsToOffice(resource.data.officeId)) ||
+        isSectionHeadOrAbove()
+      );
+      // Any signed-in employee can submit a leave request
+      allow create: if isSignedIn() &&
+        request.resource.data.employeeId == request.auth.uid;
+      // Approvers (admin/management/section head) can update; employee can cancel own
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        isManagement() ||
+        isSectionHeadOrAbove() ||
+        (resource.data.employeeId == request.auth.uid &&
+          request.resource.data.status == 'cancelled')
+      );
+      allow delete: if isAdmin();
     }
 
     // ── Developers ───────────────────────────────────────────────────────────
