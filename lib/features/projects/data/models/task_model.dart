@@ -73,6 +73,10 @@ class TaskModel {
   final List<Map<String, dynamic>> attachments;
   final List<Map<String, dynamic>> activityLog;
 
+  // ── Priority ──────────────────────────────────────────────────────────────
+  // 'urgent' | 'high' | 'normal' | 'low'
+  final String priority;
+
   // ── Meta ───────────────────────────────────────────────────────────────────
   final String createdBy;
   final String createdByName;
@@ -120,6 +124,7 @@ class TaskModel {
     required this.createdAt,
     required this.notes,
     required this.taskLink,
+    this.priority = 'normal',
   });
 
   // ── Computed ───────────────────────────────────────────────────────────────
@@ -131,6 +136,10 @@ class TaskModel {
   bool get isClientReview => status == 'client_review';
 
   bool get isOverdue => DateTime.now().isAfter(endDate) && !isCompleted;
+
+  int get priorityOrder => const {
+    'urgent': 0, 'high': 1, 'normal': 2, 'low': 3,
+  }[priority] ?? 2;
 
   String get statusLabel {
     switch (status) {
@@ -221,6 +230,7 @@ class TaskModel {
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       notes: d['notes'] ?? '',
       taskLink: d['taskLink'] ?? '',
+      priority: d['priority'] as String? ?? 'normal',
     );
   }
 
@@ -270,6 +280,7 @@ class TaskModel {
       'createdAt': Timestamp.fromDate(createdAt),
       'notes': notes,
       'taskLink': taskLink,
+      'priority': priority,
     };
   }
 
@@ -313,6 +324,7 @@ class TaskModel {
     String? taskLink,
     List<Map<String, dynamic>>? attachments,
     List<Map<String, dynamic>>? activityLog,
+    String? priority,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -356,6 +368,7 @@ class TaskModel {
       taskLink: taskLink ?? this.taskLink,
       attachments: attachments ?? this.attachments,
       activityLog: activityLog ?? this.activityLog,
+      priority: priority ?? this.priority,
     );
   }
 }

@@ -88,6 +88,33 @@ class LeaveRepository {
     return labels[jobTitle] ?? jobTitle;
   }
 
+  // ── Dynamic approval chain by reportToUserId ─────────────────────────────
+  static Future<List<Map<String, String>>> buildApprovalChainFromReportTo({
+    required String startUserId,
+    required FirebaseFirestore db,
+    int maxLevels = 5,
+  }) async {
+    final List<Map<String, String>> chain = [];
+    String? currentId = startUserId;
+    final Set<String> visited = {};
+    while (currentId != null && chain.length < maxLevels) {
+      if (visited.contains(currentId)) break; // منع الحلقة اللانهائية
+      visited.add(currentId);
+      final doc = await db.collection('users').doc(currentId).get();
+      if (!doc.exists) break;
+      final data = doc.data()!;
+      final reportToId = data['reportToUserId'] as String?;
+      if (reportToId == null || reportToId.isEmpty) break;
+      chain.add({
+        'userId': reportToId,
+        'name': data['reportToName'] as String? ?? '',
+        'jobTitle': data['reportToJobTitle'] as String? ?? '',
+      });
+      currentId = reportToId;
+    }
+    return chain;
+  }
+
   // ── Submit new leave request ───────────────────────────────────────────────
   Future<String> submitLeaveRequest({
     required String officeId,
@@ -105,12 +132,48 @@ class LeaveRepository {
     required int balanceRemaining,
   }) async {
     final now = DateTime.now();
-    final chainTitles = approvalChainFor(employeeJobTitle);
-    final approvalChain = chainTitles
-        .map((jt) => LeaveApprovalStep(jobTitle: jt, action: 'pending'))
-        .toList();
-    final currentApproverJobTitle =
-        chainTitles.isNotEmpty ? chainTitles[0] : '';
+
+    // بناء سلسلة الموافقة — نحاول reportToUserId أولاً ثم نرجع للسلسلة الثابتة
+    final empDoc = await _db.collection('users').doc(employeeId).get();
+    final empData = empDoc.exists ? empDoc.data()! : <String, dynamic>{};
+    final reportToId = empData['reportToUserId'] as String?;
+
+    List<LeaveApprovalStep> approvalChain;
+    String currentApproverJobTitle = '';
+    String currentApproverId = '';
+
+    if (reportToId != null && reportToId.isNotEmpty) {
+      // استخدام السلسلة الديناميكية
+      final dynamicChain = await buildApprovalChainFromReportTo(
+        startUserId: employeeId,
+        db: _db,
+      );
+      if (dynamicChain.isNotEmpty) {
+        approvalChain = dynamicChain
+            .map((step) => LeaveApprovalStep(
+                  jobTitle: step['jobTitle'] ?? '',
+                  approverId: step['userId'] ?? '',
+                  action: 'pending',
+                ))
+            .toList();
+        currentApproverId = dynamicChain[0]['userId'] ?? '';
+        currentApproverJobTitle = dynamicChain[0]['jobTitle'] ?? '';
+      } else {
+        // reportTo موجود لكن السلسلة فارغة — نرجع للقديم
+        final chainTitles = approvalChainFor(employeeJobTitle);
+        approvalChain = chainTitles
+            .map((jt) => LeaveApprovalStep(jobTitle: jt, action: 'pending'))
+            .toList();
+        currentApproverJobTitle = chainTitles.isNotEmpty ? chainTitles[0] : '';
+      }
+    } else {
+      // استخدام السلسلة الثابتة القديمة (backward compatible)
+      final chainTitles = approvalChainFor(employeeJobTitle);
+      approvalChain = chainTitles
+          .map((jt) => LeaveApprovalStep(jobTitle: jt, action: 'pending'))
+          .toList();
+      currentApproverJobTitle = chainTitles.isNotEmpty ? chainTitles[0] : '';
+    }
 
     final doc = await _db.collection('leave_requests').add({
       'officeId': officeId,
@@ -125,6 +188,7 @@ class LeaveRepository {
       'reason': reason,
       'status': 'pending',
       'currentApproverJobTitle': currentApproverJobTitle,
+      'currentApproverId': currentApproverId,
       'approvalChain': approvalChain.map((s) => s.toMap()).toList(),
       'hrOverride': false,
       'hrOverrideNote': '',
@@ -135,8 +199,19 @@ class LeaveRepository {
       'updatedAt': Timestamp.fromDate(now),
     });
 
-    // Notify first approvers
-    if (currentApproverJobTitle.isNotEmpty) {
+    // إخطار أول موافق
+    if (currentApproverId.isNotEmpty) {
+      // لدينا userId محدد — نرسل مباشرة
+      await _notif.sendToUser(
+        officeId: officeId,
+        recipientId: currentApproverId,
+        title: 'New Leave Request',
+        body:
+            '$employeeName has submitted a ${_typeLabel(type)} request requiring your approval.',
+        type: 'leave_approval_required',
+      );
+    } else if (currentApproverJobTitle.isNotEmpty) {
+      // نرجع لإيجاد المستخدمين بنفس المسمى الوظيفي
       final firstApprovers =
           await _fetchUsersByJobTitle(officeId, currentApproverJobTitle);
       if (firstApprovers.isNotEmpty) {
@@ -249,18 +324,34 @@ class LeaveRepository {
           type: 'leave_approved',
         );
       } else {
-        // Notify the next approver(s)
-        final nextApprovers =
-            await _fetchUsersByJobTitle(officeId, nextApproverJobTitle);
-        if (nextApprovers.isNotEmpty) {
-          await _notif.sendToMany(
+        // إيجاد userId للموافق القادم إن وُجد في السلسلة
+        final nextStep = chain.firstWhere(
+          (s) => s.action == 'pending',
+          orElse: () => LeaveApprovalStep(jobTitle: '', action: 'pending'),
+        );
+        if (nextStep.approverId.isNotEmpty) {
+          await _notif.sendToUser(
             officeId: officeId,
-            recipientIds: nextApprovers,
+            recipientId: nextStep.approverId,
             title: 'Leave Approval Required',
             body:
                 '${leave.employeeName}\'s ${leave.typeLabel} request is now awaiting your approval.',
             type: 'leave_approval_required',
           );
+        } else if (nextApproverJobTitle.isNotEmpty) {
+          // Fallback: notify by job title
+          final nextApprovers =
+              await _fetchUsersByJobTitle(officeId, nextApproverJobTitle);
+          if (nextApprovers.isNotEmpty) {
+            await _notif.sendToMany(
+              officeId: officeId,
+              recipientIds: nextApprovers,
+              title: 'Leave Approval Required',
+              body:
+                  '${leave.employeeName}\'s ${leave.typeLabel} request is now awaiting your approval.',
+              type: 'leave_approval_required',
+            );
+          }
         }
       }
     }

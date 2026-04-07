@@ -33,6 +33,18 @@ class EmployeeModel {
   final Map<String, Map<String, String>> dayOverrides;
   final bool exemptFromRules;
 
+  // ── Reporting Chain ────────────────────────────────────────────────────────
+  final String? reportToUserId;
+  final String? reportToName;
+  final String? reportToJobTitle;
+
+  // ── HR Fields ──────────────────────────────────────────────────────────────
+  // contractType: 'permanent' | 'contract' | 'part_time'
+  final String contractType;
+  final DateTime? contractEndDate; // null للعقود الدائمة
+  final String emergencyContact;
+  final String nationalId;
+
   const EmployeeModel({
     required this.uid,
     required this.officeId,
@@ -61,9 +73,29 @@ class EmployeeModel {
     this.customEndTime = '',
     this.dayOverrides = const {},
     this.exemptFromRules = false,
+    this.reportToUserId,
+    this.reportToName,
+    this.reportToJobTitle,
+    this.contractType = 'permanent',
+    this.contractEndDate,
+    this.emergencyContact = '',
+    this.nationalId = '',
   });
 
   bool get isAdmin => adminFlag || role == 'admin';
+
+  /// true إذا كان العقد سينتهي خلال 60 يوم القادمة
+  bool get isContractExpiringSoon {
+    if (contractEndDate == null) return false;
+    final daysLeft = contractEndDate!.difference(DateTime.now()).inDays;
+    return daysLeft >= 0 && daysLeft <= 60;
+  }
+
+  /// true إذا كان العقد منتهياً
+  bool get isContractExpired {
+    if (contractEndDate == null) return false;
+    return contractEndDate!.isBefore(DateTime.now());
+  }
   bool get isEngineer => role == 'engineer';
   bool get isTeamLeader => role == 'team_leader';
   bool get isReviewer => role == 'reviewer';
@@ -133,6 +165,13 @@ class EmployeeModel {
       customEndTime: d['customEndTime'] as String? ?? '',
       dayOverrides: _parseDayOverrides(d['dayOverrides']),
       exemptFromRules: d['exemptFromRules'] as bool? ?? false,
+      reportToUserId: d['reportToUserId'] as String?,
+      reportToName: d['reportToName'] as String?,
+      reportToJobTitle: d['reportToJobTitle'] as String?,
+      contractType: d['contractType'] as String? ?? 'permanent',
+      contractEndDate: (d['contractEndDate'] as Timestamp?)?.toDate(),
+      emergencyContact: d['emergencyContact'] as String? ?? '',
+      nationalId: d['nationalId'] as String? ?? '',
     );
   }
 
@@ -171,6 +210,17 @@ class EmployeeModel {
     'customEndTime': customEndTime,
     'dayOverrides': dayOverrides,
     'exemptFromRules': exemptFromRules,
+    if (reportToUserId != null && reportToUserId!.isNotEmpty)
+      'reportToUserId': reportToUserId,
+    if (reportToName != null && reportToName!.isNotEmpty)
+      'reportToName': reportToName,
+    if (reportToJobTitle != null && reportToJobTitle!.isNotEmpty)
+      'reportToJobTitle': reportToJobTitle,
+    'contractType': contractType,
+    if (contractEndDate != null)
+      'contractEndDate': Timestamp.fromDate(contractEndDate!),
+    'emergencyContact': emergencyContact,
+    'nationalId': nationalId,
   };
 
   EmployeeModel copyWith({
@@ -201,6 +251,15 @@ class EmployeeModel {
     String? customEndTime,
     Map<String, Map<String, String>>? dayOverrides,
     bool? exemptFromRules,
+    String? reportToUserId,
+    String? reportToName,
+    String? reportToJobTitle,
+    bool clearReportTo = false,
+    String? contractType,
+    DateTime? contractEndDate,
+    bool clearContractEndDate = false,
+    String? emergencyContact,
+    String? nationalId,
   }) {
     return EmployeeModel(
       uid: uid ?? this.uid,
@@ -230,6 +289,13 @@ class EmployeeModel {
       customEndTime: customEndTime ?? this.customEndTime,
       dayOverrides: dayOverrides ?? this.dayOverrides,
       exemptFromRules: exemptFromRules ?? this.exemptFromRules,
+      reportToUserId: clearReportTo ? null : (reportToUserId ?? this.reportToUserId),
+      reportToName: clearReportTo ? null : (reportToName ?? this.reportToName),
+      reportToJobTitle: clearReportTo ? null : (reportToJobTitle ?? this.reportToJobTitle),
+      contractType: contractType ?? this.contractType,
+      contractEndDate: clearContractEndDate ? null : (contractEndDate ?? this.contractEndDate),
+      emergencyContact: emergencyContact ?? this.emergencyContact,
+      nationalId: nationalId ?? this.nationalId,
     );
   }
 }

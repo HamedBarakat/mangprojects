@@ -76,6 +76,30 @@ class EmployeeCard extends StatelessWidget {
                       _StatusBadge(status: employee.status),
                     ],
                   ),
+                  // تحذير انتهاء العقد
+                  if (employee.isContractExpired) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: const [
+                        Icon(Icons.warning_amber_rounded, size: 12, color: AppColors.error),
+                        SizedBox(width: 4),
+                        Text('Contract Expired', style: TextStyle(color: AppColors.error, fontSize: 10, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ] else if (employee.isContractExpiringSoon) ...[
+                    const SizedBox(height: 4),
+                    Builder(builder: (context) {
+                      final daysLeft = employee.contractEndDate!.difference(DateTime.now()).inDays;
+                      return Row(
+                        children: [
+                          const Icon(Icons.schedule_outlined, size: 12, color: AppColors.warning),
+                          const SizedBox(width: 4),
+                          Text('Contract ends in $daysLeft days',
+                              style: const TextStyle(color: AppColors.warning, fontSize: 10, fontWeight: FontWeight.w600)),
+                        ],
+                      );
+                    }),
+                  ],
                 ],
               ),
             ),

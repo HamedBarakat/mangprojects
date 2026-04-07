@@ -872,6 +872,8 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
   bool _disciplineInitialized = false;
   String? _errorMessage;
 
+  String _priority = 'normal';
+
   bool get _isEdit => widget.task != null;
 
   @override
@@ -887,6 +889,7 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
       text: t != null ? t.plannedHours.toStringAsFixed(0) : '',
     );
 
+    _priority = t?.priority ?? 'normal';
     _selectedCategory = t?.category;
     _selectedDiscipline = t?.discipline;
     _selectedReviewer = (t?.reviewerId.isNotEmpty ?? false)
@@ -1199,6 +1202,12 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
                   onChanged: (_) => setState(() => _errorMessage = null),
                 ),
                 const SizedBox(height: 12),
+                // ── Priority selector ────────────────────────────────────
+                _PrioritySelector(
+                  value: _priority,
+                  onChanged: (v) => setState(() => _priority = v),
+                ),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -1401,6 +1410,7 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
           plannedHours: double.tryParse(_hoursController.text) ?? 0,
           notes: _notesController.text.trim(),
           taskLink: _linkController.text.trim(),
+          priority: _priority,
         );
 
         await ref.read(taskRepositoryProvider).updateTask(updated);
@@ -1456,6 +1466,7 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
           clientReviewedAt: null,
           attachments: const [],
           activityLog: const [],
+          priority: _priority,
         );
 
         await ref
@@ -1489,6 +1500,84 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
       ),
+    );
+  }
+}
+
+// ── Priority Selector ──────────────────────────────────────────────────────────
+class _PrioritySelector extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _PrioritySelector({required this.value, required this.onChanged});
+
+  static const _priorities = [
+    ('urgent', 'Urgent',  Color(0xFFE53935)),
+    ('high',   'High',    Color(0xFFFF7043)),
+    ('normal', 'Normal',  Color(0xFF1E88E5)),
+    ('low',    'Low',     Color(0xFF90A4AE)),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Priority',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: cs.onSurface.withValues(alpha: 0.8),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _priorities.map(((String key, String label, Color color) p) {
+            final selected = value == p.$1;
+            return InkWell(
+              onTap: () => onChanged(p.$1),
+              borderRadius: BorderRadius.circular(8),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: selected ? p.$3.withValues(alpha: 0.15) : cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: selected ? p.$3 : cs.outlineVariant,
+                    width: selected ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: p.$3,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      p.$2,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                        color: selected ? p.$3 : cs.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }

@@ -88,7 +88,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    // Tab 6 (Employee Profile) is added below based on user permissions
+    _tabController = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -131,6 +132,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
             ),
             Tab(icon: Icon(Icons.people_outline, size: 18), text: 'Employees'),
             Tab(icon: Icon(Icons.business_outlined, size: 18), text: 'Clients'),
+            Tab(icon: Icon(Icons.person_search_outlined, size: 18), text: 'Employee'),
           ],
         ),
       ),
@@ -149,6 +151,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                 // Client reports: restricted to management/admin
                 user.canSeeEmployeeReports
                     ? _ClientsReportTab(user: user)
+                    : const _ReportAccessDenied(),
+                // Employee Profile report: admin/management only
+                user.canSeeEmployeeReports
+                    ? _EmployeeProfileReportTab(user: user)
                     : const _ReportAccessDenied(),
               ],
             ),
@@ -171,6 +177,8 @@ class _ProjectsReportTabState extends State<_ProjectsReportTab> {
   String _statusFilter = 'all';
   bool _loading = false;
   List<Map<String, dynamic>>? _data;
+  DateTime? _fromDate;
+  DateTime? _toDate;
 
   @override
   void initState() {
@@ -189,10 +197,32 @@ class _ProjectsReportTabState extends State<_ProjectsReportTab> {
   }
 
   List<Map<String, dynamic>> get _filtered {
-    final d = _data ?? [];
-    return _statusFilter == 'all'
-        ? d
-        : d.where((p) => p['status'] == _statusFilter).toList();
+    var d = _data ?? [];
+    if (_statusFilter != 'all') {
+      d = d.where((p) => p['status'] == _statusFilter).toList();
+    }
+    if (_fromDate != null || _toDate != null) {
+      d = d.where((p) {
+        final ts = p['createdAt'];
+        if (ts == null) return true;
+        final date = (ts as Timestamp).toDate();
+        if (_fromDate != null && date.isBefore(_fromDate!)) return false;
+        if (_toDate != null && date.isAfter(_toDate!.add(const Duration(days: 1)))) return false;
+        return true;
+      }).toList();
+    }
+    return d;
+  }
+
+  String get _periodLabel {
+    if (_fromDate == null && _toDate == null) return '';
+    final from = _fromDate != null
+        ? '${_fromDate!.day.toString().padLeft(2, '0')}/${_fromDate!.month.toString().padLeft(2, '0')}/${_fromDate!.year}'
+        : '—';
+    final to = _toDate != null
+        ? '${_toDate!.day.toString().padLeft(2, '0')}/${_toDate!.month.toString().padLeft(2, '0')}/${_toDate!.year}'
+        : '—';
+    return 'Period: $from — $to';
   }
 
   @override
@@ -202,34 +232,47 @@ class _ProjectsReportTabState extends State<_ProjectsReportTab> {
     final filtered = _filtered;
 
     return _ReportLayout(
-      filters: _FilterChips(
-        options: const {
-          'all': 'All',
-          'active': 'Active',
-          'completed': 'Completed',
-          'on_hold': 'On Hold',
-        },
-        selected: _statusFilter,
-        onSelected: (v) => setState(() => _statusFilter = v),
+      filters: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _FilterChips(
+            options: const {
+              'all': 'All',
+              'active': 'Active',
+              'completed': 'Completed',
+              'on_hold': 'On Hold',
+            },
+            selected: _statusFilter,
+            onSelected: (v) => setState(() => _statusFilter = v),
+          ),
+          const SizedBox(height: 10),
+          _DateRangePicker(
+            fromDate: _fromDate,
+            toDate: _toDate,
+            onFromChanged: (d) => setState(() => _fromDate = d),
+            onToChanged: (d) => setState(() => _toDate = d),
+            onClear: () => setState(() { _fromDate = null; _toDate = null; }),
+          ),
+        ],
       ),
       summary: _SummaryRow(
         items: [
-          _SI('Total', data.length.toString(), Icons.folder_outlined),
+          _SI('Total', filtered.length.toString(), Icons.folder_outlined),
           _SI(
             'Active',
-            data.where((p) => p['status'] == 'active').length.toString(),
+            filtered.where((p) => p['status'] == 'active').length.toString(),
             Icons.play_circle_outline,
             Colors.green,
           ),
           _SI(
             'Done',
-            data.where((p) => p['status'] == 'completed').length.toString(),
+            filtered.where((p) => p['status'] == 'completed').length.toString(),
             Icons.check_circle_outline,
             Colors.blue,
           ),
           _SI(
             'On Hold',
-            data.where((p) => p['status'] == 'on_hold').length.toString(),
+            filtered.where((p) => p['status'] == 'on_hold').length.toString(),
             Icons.pause_circle_outline,
             Colors.orange,
           ),
@@ -272,7 +315,7 @@ class _ProjectsReportTabState extends State<_ProjectsReportTab> {
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(28),
           build: (ctx) => [
-            _pdfHeader('Projects Report'),
+            _pdfHeader('Projects Report', period: _periodLabel),
             pw.SizedBox(height: 12),
             pw.Table.fromTextArray(
               headers: [
@@ -365,6 +408,8 @@ class _TasksReportTabState extends State<_TasksReportTab> {
   String _statusFilter = 'all';
   bool _loading = false;
   List<Map<String, dynamic>>? _data;
+  DateTime? _fromDate;
+  DateTime? _toDate;
 
   @override
   void initState() {
@@ -383,10 +428,32 @@ class _TasksReportTabState extends State<_TasksReportTab> {
   }
 
   List<Map<String, dynamic>> get _filtered {
-    final d = _data ?? [];
-    return _statusFilter == 'all'
-        ? d
-        : d.where((t) => t['status'] == _statusFilter).toList();
+    var d = _data ?? [];
+    if (_statusFilter != 'all') {
+      d = d.where((t) => t['status'] == _statusFilter).toList();
+    }
+    if (_fromDate != null || _toDate != null) {
+      d = d.where((t) {
+        final ts = t['createdAt'];
+        if (ts == null) return true;
+        final date = (ts as Timestamp).toDate();
+        if (_fromDate != null && date.isBefore(_fromDate!)) return false;
+        if (_toDate != null && date.isAfter(_toDate!.add(const Duration(days: 1)))) return false;
+        return true;
+      }).toList();
+    }
+    return d;
+  }
+
+  String get _periodLabel {
+    if (_fromDate == null && _toDate == null) return '';
+    final from = _fromDate != null
+        ? '${_fromDate!.day.toString().padLeft(2, '0')}/${_fromDate!.month.toString().padLeft(2, '0')}/${_fromDate!.year}'
+        : '—';
+    final to = _toDate != null
+        ? '${_toDate!.day.toString().padLeft(2, '0')}/${_toDate!.month.toString().padLeft(2, '0')}/${_toDate!.year}'
+        : '—';
+    return 'Period: $from — $to';
   }
 
   @override
@@ -425,32 +492,42 @@ class _TasksReportTabState extends State<_TasksReportTab> {
               'all': 'All',
               'not_started': 'Not Started',
               'in_progress': 'In Progress',
-              'under_review': 'Under Review',
+              'team_leader_review': 'TL Review',
+              'qc_review': 'QC Review',
+              'client_review': 'Client Review',
               'completed': 'Completed',
             },
             selected: _statusFilter,
             onSelected: (v) => setState(() => _statusFilter = v),
           ),
+          const SizedBox(height: 10),
+          _DateRangePicker(
+            fromDate: _fromDate,
+            toDate: _toDate,
+            onFromChanged: (d) => setState(() => _fromDate = d),
+            onToChanged: (d) => setState(() => _toDate = d),
+            onClear: () => setState(() { _fromDate = null; _toDate = null; }),
+          ),
         ],
       ),
       summary: _SummaryRow(
         items: [
-          _SI('Total', data.length.toString(), Icons.task_outlined),
+          _SI('Total', filtered.length.toString(), Icons.task_outlined),
           _SI(
             'In Progress',
-            data.where((t) => t['status'] == 'in_progress').length.toString(),
+            filtered.where((t) => t['status'] == 'in_progress').length.toString(),
             Icons.pending_outlined,
             Colors.orange,
           ),
           _SI(
-            'Review',
-            data.where((t) => t['status'] == 'under_review').length.toString(),
+            'In Review',
+            filtered.where((t) => ['team_leader_review', 'qc_review', 'client_review'].contains(t['status'])).length.toString(),
             Icons.rate_review_outlined,
             Colors.indigo,
           ),
           _SI(
             'Done',
-            data.where((t) => t['status'] == 'completed').length.toString(),
+            filtered.where((t) => t['status'] == 'completed').length.toString(),
             Icons.check_circle_outline,
             Colors.green,
           ),
@@ -466,8 +543,8 @@ class _TasksReportTabState extends State<_TasksReportTab> {
           'Task',
           _groupBy == 'project' ? 'Project' : 'Assigned To',
           'Status',
-          'Est. Hrs',
-          'Due Date',
+          'Plan Hrs',
+          'End Date',
         ],
         rows: filtered
             .map(
@@ -475,10 +552,10 @@ class _TasksReportTabState extends State<_TasksReportTab> {
                 t['title'] ?? '—',
                 _groupBy == 'project'
                     ? (t['projectName'] ?? t['projectId'] ?? '—')
-                    : (t['assignedToName'] ?? '—'),
+                    : ((t['assignedEngineerNames'] as List?)?.join(', ') ?? '—'),
                 _taskStatusLabel(t['status']),
-                '${t['estimatedHours'] ?? 0}h',
-                _fmtDate(t['dueDate']),
+                '${t['plannedHours'] ?? 0}h',
+                _fmtDate(t['endDate']),
               ],
             )
             .toList(),
@@ -495,7 +572,7 @@ class _TasksReportTabState extends State<_TasksReportTab> {
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(28),
           build: (ctx) => [
-            _pdfHeader('Tasks Report'),
+            _pdfHeader('Tasks Report', period: _periodLabel),
             pw.SizedBox(height: 12),
             pw.Table.fromTextArray(
               headers: [
@@ -503,18 +580,18 @@ class _TasksReportTabState extends State<_TasksReportTab> {
                 'Project',
                 'Assigned To',
                 'Status',
-                'Est. Hours',
-                'Due Date',
+                'Plan Hrs',
+                'End Date',
               ],
               data: data
                   .map(
                     (t) => [
                       t['title'] ?? '—',
                       t['projectName'] ?? t['projectId'] ?? '—',
-                      t['assignedToName'] ?? '—',
+                      (t['assignedEngineerNames'] as List?)?.join(', ') ?? '—',
                       _taskStatusLabel(t['status']),
-                      '${t['estimatedHours'] ?? 0}h',
-                      _fmtDate(t['dueDate']),
+                      '${t['plannedHours'] ?? 0}h',
+                      _fmtDate(t['endDate']),
                     ],
                   )
                   .toList(),
@@ -551,20 +628,20 @@ class _TasksReportTabState extends State<_TasksReportTab> {
         'Project',
         'Assigned To',
         'Status',
-        'Est. Hours',
+        'Plan Hours',
         'Actual Hours',
-        'Due Date',
+        'End Date',
       ]);
       for (var ri = 1; ri <= data.length; ri++) {
         final t = data[ri - 1];
         _excelRow(sheet, [
           TextCellValue(t['title'] ?? ''),
           TextCellValue(t['projectName'] ?? t['projectId'] ?? ''),
-          TextCellValue(t['assignedToName'] ?? ''),
+          TextCellValue((t['assignedEngineerNames'] as List?)?.join(', ') ?? ''),
           TextCellValue(_taskStatusLabel(t['status'])),
-          TextCellValue('${t['estimatedHours'] ?? 0}'),
+          TextCellValue('${t['plannedHours'] ?? 0}'),
           TextCellValue('${t['actualHours'] ?? 0}'),
-          TextCellValue(_fmtDate(t['dueDate'])),
+          TextCellValue(_fmtDate(t['endDate'])),
         ], ri);
       }
       await _shareExcel(excel, 'tasks_report.xlsx');
@@ -586,33 +663,60 @@ class _AttendanceReportTab extends StatefulWidget {
 }
 
 class _AttendanceReportTabState extends State<_AttendanceReportTab> {
-  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+  DateTime? _fromDate;
+  DateTime? _toDate;
   bool _loading = false;
   List<Map<String, dynamic>>? _data;
 
   @override
   void initState() {
     super.initState();
+    // default to current month
+    final now = DateTime.now();
+    _fromDate = DateTime(now.year, now.month, 1);
+    _toDate = DateTime(now.year, now.month + 1, 0);
     _fetch();
   }
 
+  String _dateKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   Future<void> _fetch() async {
-    final y = _month.year;
-    final m = _month.month.toString().padLeft(2, '0');
-    final lastDay = DateTime(_month.year, _month.month + 1, 0).day;
-    final snap = await FirebaseFirestore.instance
-        .collection('attendance')
-        .where('officeId', isEqualTo: widget.user.officeId)
-        .where('date', isGreaterThanOrEqualTo: '$y-$m-01')
-        .where(
-          'date',
-          isLessThanOrEqualTo: '$y-$m-${lastDay.toString().padLeft(2, '0')}',
-        )
-        .orderBy('date')
-        .get();
+    final from = _fromDate;
+    final to = _toDate;
+    QuerySnapshot<Map<String, dynamic>> snap;
+    if (from != null && to != null) {
+      snap = await FirebaseFirestore.instance
+          .collection('attendance')
+          .where('officeId', isEqualTo: widget.user.officeId)
+          .where('date', isGreaterThanOrEqualTo: _dateKey(from))
+          .where('date', isLessThanOrEqualTo: _dateKey(to))
+          .orderBy('date')
+          .get();
+    } else if (from != null) {
+      snap = await FirebaseFirestore.instance
+          .collection('attendance')
+          .where('officeId', isEqualTo: widget.user.officeId)
+          .where('date', isGreaterThanOrEqualTo: _dateKey(from))
+          .orderBy('date')
+          .get();
+    } else {
+      snap = await FirebaseFirestore.instance
+          .collection('attendance')
+          .where('officeId', isEqualTo: widget.user.officeId)
+          .orderBy('date')
+          .get();
+    }
     if (mounted) {
       setState(() => _data = snap.docs.map((d) => d.data()).toList());
     }
+  }
+
+  String get _periodLabel {
+    if (_fromDate == null && _toDate == null) return '';
+    final from = _fromDate != null ? _dateKey(_fromDate!) : '—';
+    final to = _toDate != null ? _dateKey(_toDate!) : '—';
+    return 'Period: $from — $to';
   }
 
   @override
@@ -623,13 +727,19 @@ class _AttendanceReportTabState extends State<_AttendanceReportTab> {
     final absent = data?.where((r) => r['status'] == 'absent').length ?? 0;
 
     return _ReportLayout(
-      filters: _MonthPicker(
-        selected: _month,
-        onChanged: (d) {
-          setState(() {
-            _month = d;
-            _data = null;
-          });
+      filters: _DateRangePicker(
+        fromDate: _fromDate,
+        toDate: _toDate,
+        onFromChanged: (d) {
+          setState(() { _fromDate = d; _data = null; });
+          _fetch();
+        },
+        onToChanged: (d) {
+          setState(() { _toDate = d; _data = null; });
+          _fetch();
+        },
+        onClear: () {
+          setState(() { _fromDate = null; _toDate = null; _data = null; });
           _fetch();
         },
       ),
@@ -686,14 +796,13 @@ class _AttendanceReportTabState extends State<_AttendanceReportTab> {
   Future<void> _exportPdf(List<Map<String, dynamic>> data) async {
     setState(() => _loading = true);
     try {
-      final label = _fmtMonthYear(_month);
       final pdf = pw.Document();
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(28),
           build: (ctx) => [
-            _pdfHeader('Attendance Report — $label'),
+            _pdfHeader('Attendance Report', period: _periodLabel),
             pw.SizedBox(height: 12),
             pw.Table.fromTextArray(
               headers: [
@@ -735,7 +844,7 @@ class _AttendanceReportTabState extends State<_AttendanceReportTab> {
       );
       await _sharePdf(
         await pdf.save(),
-        'attendance_${_fmtMonthCode(_month)}.pdf',
+        'attendance_report.pdf',
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -766,7 +875,7 @@ class _AttendanceReportTabState extends State<_AttendanceReportTab> {
           TextCellValue(_attendanceLabel(r['status'])),
         ], ri);
       }
-      await _shareExcel(excel, 'attendance_${_fmtMonthCode(_month)}.xlsx');
+      await _shareExcel(excel, 'attendance_report.xlsx');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -824,6 +933,8 @@ class _EmployeesReportTabState extends State<_EmployeesReportTab> {
   String _deptFilter = 'all';
   bool _loading = false;
   List<Map<String, dynamic>>? _data;
+  DateTime? _fromDate;
+  DateTime? _toDate;
 
   @override
   void initState() {
@@ -848,10 +959,32 @@ class _EmployeesReportTabState extends State<_EmployeesReportTab> {
   }
 
   List<Map<String, dynamic>> get _filtered {
-    final d = _data ?? [];
-    return _deptFilter == 'all'
-        ? d
-        : d.where((e) => e['department'] == _deptFilter).toList();
+    var d = _data ?? [];
+    if (_deptFilter != 'all') {
+      d = d.where((e) => e['department'] == _deptFilter).toList();
+    }
+    if (_fromDate != null || _toDate != null) {
+      d = d.where((e) {
+        final ts = e['joinDate'];
+        if (ts == null) return true;
+        final date = (ts as Timestamp).toDate();
+        if (_fromDate != null && date.isBefore(_fromDate!)) return false;
+        if (_toDate != null && date.isAfter(_toDate!.add(const Duration(days: 1)))) return false;
+        return true;
+      }).toList();
+    }
+    return d;
+  }
+
+  String get _periodLabel {
+    if (_fromDate == null && _toDate == null) return '';
+    final from = _fromDate != null
+        ? '${_fromDate!.day.toString().padLeft(2, '0')}/${_fromDate!.month.toString().padLeft(2, '0')}/${_fromDate!.year}'
+        : '—';
+    final to = _toDate != null
+        ? '${_toDate!.day.toString().padLeft(2, '0')}/${_toDate!.month.toString().padLeft(2, '0')}/${_toDate!.year}'
+        : '—';
+    return 'Period: $from — $to';
   }
 
   @override
@@ -873,29 +1006,42 @@ class _EmployeesReportTabState extends State<_EmployeesReportTab> {
     final filtered = _filtered;
 
     return _ReportLayout(
-      filters: _FilterChips(
-        options: deptOptions,
-        selected: _deptFilter,
-        onSelected: (v) => setState(() => _deptFilter = v),
+      filters: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _FilterChips(
+            options: deptOptions,
+            selected: _deptFilter,
+            onSelected: (v) => setState(() => _deptFilter = v),
+          ),
+          const SizedBox(height: 10),
+          _DateRangePicker(
+            fromDate: _fromDate,
+            toDate: _toDate,
+            onFromChanged: (d) => setState(() => _fromDate = d),
+            onToChanged: (d) => setState(() => _toDate = d),
+            onClear: () => setState(() { _fromDate = null; _toDate = null; }),
+          ),
+        ],
       ),
       summary: _SummaryRow(
         items: [
-          _SI('Total', data.length.toString(), Icons.people_outline),
+          _SI('Total', filtered.length.toString(), Icons.people_outline),
           _SI(
             'Active',
-            data.where((e) => e['isActive'] == true).length.toString(),
+            filtered.where((e) => e['isActive'] == true).length.toString(),
             Icons.check_circle_outline,
             Colors.green,
           ),
           _SI(
             'Suspended',
-            data.where((e) => e['status'] == 'suspended').length.toString(),
+            filtered.where((e) => e['status'] == 'suspended').length.toString(),
             Icons.pause_circle_outline,
             Colors.orange,
           ),
           _SI(
             'Admin',
-            data.where((e) => e['adminFlag'] == true).length.toString(),
+            filtered.where((e) => e['adminFlag'] == true).length.toString(),
             Icons.admin_panel_settings_outlined,
             Colors.deepPurple,
           ),
@@ -942,7 +1088,7 @@ class _EmployeesReportTabState extends State<_EmployeesReportTab> {
           pageFormat: PdfPageFormat.a4.landscape,
           margin: const pw.EdgeInsets.all(24),
           build: (ctx) => [
-            _pdfHeader('Employees Report'),
+            _pdfHeader('Employees Report', period: _periodLabel),
             pw.SizedBox(height: 12),
             pw.Table.fromTextArray(
               headers: [
@@ -1033,6 +1179,519 @@ class _EmployeesReportTabState extends State<_EmployeesReportTab> {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// EMPLOYEE PROFILE REPORT TAB
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _EmployeeProfileReportTab extends StatefulWidget {
+  final UserModel user;
+  const _EmployeeProfileReportTab({required this.user});
+  @override
+  State<_EmployeeProfileReportTab> createState() => _EmployeeProfileReportTabState();
+}
+
+class _EmployeeProfileReportTabState extends State<_EmployeeProfileReportTab> {
+  List<Map<String, dynamic>> _employees = [];
+  String? _selectedEmpId;
+  Map<String, dynamic>? _selectedEmp;
+  DateTime? _fromDate;
+  DateTime? _toDate;
+  bool _loading = false;
+  bool _fetchingData = false;
+
+  // Data
+  List<Map<String, dynamic>> _attendance = [];
+  List<Map<String, dynamic>> _leaves = [];
+  List<Map<String, dynamic>> _tasks = [];
+
+  // Collapsible sections
+  bool _showAttendance = true;
+  bool _showLeaves = true;
+  bool _showTasks = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEmployees();
+  }
+
+  Future<void> _loadEmployees() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .where('officeId', isEqualTo: widget.user.officeId)
+        .where('isActive', isEqualTo: true)
+        .get();
+    if (!mounted) return;
+    setState(() {
+      _employees = snap.docs
+          .where((d) => d.data()['role'] != 'client')
+          .map((d) => {'uid': d.id, ...d.data()})
+          .toList()
+        ..sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+    });
+  }
+
+  Future<void> _fetchData() async {
+    if (_selectedEmpId == null) return;
+    setState(() { _fetchingData = true; _attendance = []; _leaves = []; _tasks = []; });
+
+    final db = FirebaseFirestore.instance;
+    final empId = _selectedEmpId!;
+
+    // Attendance
+    final attSnap = await db.collection('attendance')
+        .where('employeeId', isEqualTo: empId)
+        .get();
+    var att = attSnap.docs.map((d) => d.data()).toList();
+    att = att.where((r) {
+      final dateStr = r['date'] as String?;
+      if (dateStr == null) return true;
+      try {
+        final parts = dateStr.split('-');
+        final d = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        if (_fromDate != null && d.isBefore(_fromDate!)) return false;
+        if (_toDate != null && d.isAfter(_toDate!)) return false;
+      } catch (_) {}
+      return true;
+    }).toList()
+      ..sort((a, b) => (a['date'] as String? ?? '').compareTo(b['date'] as String? ?? ''));
+
+    // Leaves
+    final leaveSnap = await db.collection('leave_requests')
+        .where('employeeId', isEqualTo: empId)
+        .get();
+    var leaves = leaveSnap.docs.map((d) => d.data()).toList();
+    leaves = leaves.where((r) {
+      final ts = r['startDate'];
+      if (ts == null) return true;
+      final d = (ts as Timestamp).toDate();
+      if (_fromDate != null && d.isBefore(_fromDate!)) return false;
+      if (_toDate != null && d.isAfter(_toDate!.add(const Duration(days: 1)))) return false;
+      return true;
+    }).toList();
+
+    // Tasks
+    final taskSnap = await db.collection('tasks')
+        .where('officeId', isEqualTo: widget.user.officeId)
+        .where('assignedEngineerIds', arrayContains: empId)
+        .get();
+    var tasks = taskSnap.docs.map((d) => d.data()).toList()
+        .where((t) => t['status'] == 'completed')
+        .toList();
+    tasks = tasks.where((t) {
+      final ts = t['endDate'];
+      if (ts == null) return true;
+      final d = (ts as Timestamp).toDate();
+      if (_fromDate != null && d.isBefore(_fromDate!)) return false;
+      if (_toDate != null && d.isAfter(_toDate!.add(const Duration(days: 1)))) return false;
+      return true;
+    }).toList();
+
+    if (!mounted) return;
+    setState(() {
+      _attendance = att;
+      _leaves = leaves;
+      _tasks = tasks;
+      _fetchingData = false;
+    });
+  }
+
+  String get _periodLabel {
+    if (_fromDate == null && _toDate == null) return '';
+    final fmt = (DateTime d) =>
+        '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    return 'Period: ${_fromDate != null ? fmt(_fromDate!) : '—'} — ${_toDate != null ? fmt(_toDate!) : '—'}';
+  }
+
+  String _fmtDateLocal(dynamic v) {
+    if (v == null) return '—';
+    try {
+      DateTime? d;
+      if (v is Timestamp) d = v.toDate();
+      if (d == null) return v.toString();
+      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    } catch (_) { return '—'; }
+  }
+
+  String _fmtTimeLocal(dynamic ts) {
+    if (ts is! Timestamp) return '—';
+    final d = ts.toDate().toLocal();
+    return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _calcHoursLocal(dynamic i, dynamic o) {
+    if (i is! Timestamp || o is! Timestamp) return '—';
+    final diff = o.toDate().difference(i.toDate());
+    return '${diff.inHours}h ${diff.inMinutes % 60}m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Employee selector ──────────────────────────────────────────
+          DropdownButtonFormField<String>(
+            value: _selectedEmpId,
+            hint: const Text('Select employee...'),
+            isExpanded: true,
+            onChanged: (uid) {
+              setState(() {
+                _selectedEmpId = uid;
+                _selectedEmp = _employees.firstWhere(
+                    (e) => e['uid'] == uid, orElse: () => {});
+              });
+              if (_fromDate != null || _toDate != null) _fetchData();
+            },
+            decoration: InputDecoration(
+              labelText: 'Employee',
+              prefixIcon: Icon(Icons.person_outline, color: cs.primary),
+              filled: true,
+              fillColor: cs.surfaceContainerHighest,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            items: _employees.map((e) => DropdownMenuItem<String>(
+              value: e['uid'] as String,
+              child: Text('${e['name']} — ${e['jobTitle'] ?? ''}',
+                  overflow: TextOverflow.ellipsis),
+            )).toList(),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Date range ─────────────────────────────────────────────────
+          _DateRangePicker(
+            fromDate: _fromDate,
+            toDate: _toDate,
+            onFromChanged: (d) { setState(() => _fromDate = d); if (_selectedEmpId != null) _fetchData(); },
+            onToChanged: (d) { setState(() => _toDate = d); if (_selectedEmpId != null) _fetchData(); },
+            onClear: () { setState(() { _fromDate = null; _toDate = null; }); _fetchData(); },
+          ),
+          const SizedBox(height: 20),
+
+          if (_fetchingData)
+            const Center(child: CircularProgressIndicator())
+          else if (_selectedEmpId == null)
+            Center(
+              child: Column(
+                children: [
+                  const SizedBox(height: 40),
+                  Icon(Icons.person_search_outlined, size: 56, color: cs.subtleText),
+                  const SizedBox(height: 12),
+                  Text('Select an employee to view their report',
+                      style: TextStyle(color: cs.subtleText)),
+                ],
+              ),
+            )
+          else ...[
+            // ── Summary cards ────────────────────────────────────────────
+            _SummaryRow(items: [
+              _SI(
+                'Present',
+                _attendance.where((r) => r['status'] == 'present').length.toString(),
+                Icons.check_circle_outline, Colors.green,
+              ),
+              _SI(
+                'Late',
+                _attendance.where((r) => r['status'] == 'late').length.toString(),
+                Icons.watch_later_outlined, Colors.orange,
+              ),
+              _SI(
+                'Tasks Done',
+                _tasks.length.toString(),
+                Icons.task_alt_outlined, Colors.blue,
+              ),
+              _SI(
+                'Leaves',
+                _leaves.where((r) => r['status'] == 'approved_final').length.toString(),
+                Icons.event_note_outlined, Colors.purple,
+              ),
+            ]),
+            const SizedBox(height: 20),
+
+            // ── Export buttons ────────────────────────────────────────────
+            _ExportButtons(
+              loading: _loading,
+              onPdf: _exportPdf,
+              onExcel: _exportExcel,
+            ),
+            const SizedBox(height: 20),
+
+            // ── Attendance section ────────────────────────────────────────
+            _CollapsibleSection(
+              title: 'Attendance Records (${_attendance.length})',
+              expanded: _showAttendance,
+              onToggle: () => setState(() => _showAttendance = !_showAttendance),
+              child: _Table(
+                columns: const ['Date', 'Check In', 'Check Out', 'Hours', 'Status'],
+                rows: _attendance.map((r) => [
+                  r['date'] ?? '—',
+                  _fmtTimeLocal(r['checkIn']),
+                  _fmtTimeLocal(r['checkOut']),
+                  _calcHoursLocal(r['checkIn'], r['checkOut']),
+                  _attendanceLabel(r['status']),
+                ]).toList(),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ── Leave section ─────────────────────────────────────────────
+            _CollapsibleSection(
+              title: 'Leave Requests (${_leaves.length})',
+              expanded: _showLeaves,
+              onToggle: () => setState(() => _showLeaves = !_showLeaves),
+              child: _Table(
+                columns: const ['Type', 'From', 'To', 'Days', 'Status'],
+                rows: _leaves.map((r) => [
+                  _leaveTypeLabel(r['type']),
+                  _fmtDateLocal(r['startDate']),
+                  _fmtDateLocal(r['endDate']),
+                  '${(r['durationDays'] ?? 0).toStringAsFixed(1)}',
+                  _leaveStatusLabel(r['status']),
+                ]).toList(),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ── Tasks section ─────────────────────────────────────────────
+            _CollapsibleSection(
+              title: 'Completed Tasks (${_tasks.length})',
+              expanded: _showTasks,
+              onToggle: () => setState(() => _showTasks = !_showTasks),
+              child: _Table(
+                columns: const ['Task Name', 'Project', 'End Date', 'Plan Hrs', 'Actual Hrs'],
+                rows: _tasks.map((t) => [
+                  t['title'] ?? '—',
+                  t['projectName'] ?? '—',
+                  _fmtDateLocal(t['endDate']),
+                  '${t['plannedHours'] ?? 0}h',
+                  '${t['actualHours'] ?? 0}h',
+                ]).toList(),
+              ),
+            ),
+            const SizedBox(height: 32),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _leaveTypeLabel(dynamic t) => const {
+    'annual_leave': 'Annual Leave', 'sick_leave': 'Sick Leave',
+    'permission': 'Permission', 'emergency': 'Emergency',
+  }[t] ?? (t?.toString() ?? '—');
+
+  String _leaveStatusLabel(dynamic s) => const {
+    'pending': 'Pending', 'approved_l1': 'Part. Approved',
+    'approved_l2': 'Part. Approved', 'approved_final': 'Approved',
+    'rejected': 'Rejected', 'cancelled': 'Cancelled',
+  }[s] ?? (s?.toString() ?? '—');
+
+  Future<void> _exportPdf() async {
+    setState(() => _loading = true);
+    final emp = _selectedEmp;
+    if (emp == null) { setState(() => _loading = false); return; }
+    try {
+      final pdf = pw.Document();
+      final header = _pdfHeader(
+        'Employee Report — ${emp['name'] ?? ''}',
+        period: _periodLabel,
+      );
+
+      // Page 1: Attendance
+      pdf.addPage(pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(28),
+        build: (ctx) => [
+          header,
+          pw.SizedBox(height: 8),
+          pw.Text('Job Title: ${emp['jobTitle'] ?? '—'}',
+              style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+          pw.SizedBox(height: 12),
+          pw.Text('Attendance Records', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13)),
+          pw.SizedBox(height: 8),
+          pw.Table.fromTextArray(
+            headers: ['Date', 'Check In', 'Check Out', 'Hours', 'Status'],
+            data: _attendance.map((r) => [
+              r['date'] ?? '—', _fmtTimeLocal(r['checkIn']),
+              _fmtTimeLocal(r['checkOut']), _calcHoursLocal(r['checkIn'], r['checkOut']),
+              _attendanceLabel(r['status']),
+            ]).toList(),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.white),
+            headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF2E7D32)),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF1F8E9)),
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+          ),
+          pw.SizedBox(height: 16),
+          pw.Text('Leave Requests', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13)),
+          pw.SizedBox(height: 8),
+          pw.Table.fromTextArray(
+            headers: ['Type', 'From', 'To', 'Days', 'Status'],
+            data: _leaves.map((r) => [
+              _leaveTypeLabel(r['type']), _fmtDateLocal(r['startDate']),
+              _fmtDateLocal(r['endDate']), '${(r['durationDays'] ?? 0).toStringAsFixed(1)}',
+              _leaveStatusLabel(r['status']),
+            ]).toList(),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.white),
+            headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF1565C0)),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFE3F2FD)),
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+          ),
+          pw.SizedBox(height: 16),
+          pw.Text('Completed Tasks', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13)),
+          pw.SizedBox(height: 8),
+          pw.Table.fromTextArray(
+            headers: ['Task Name', 'Project', 'End Date', 'Plan Hrs', 'Actual Hrs'],
+            data: _tasks.map((t) => [
+              t['title'] ?? '—', t['projectName'] ?? '—',
+              _fmtDateLocal(t['endDate']),
+              '${t['plannedHours'] ?? 0}h', '${t['actualHours'] ?? 0}h',
+            ]).toList(),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.white),
+            headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF6A1B9A)),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF3E5F5)),
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+          ),
+        ],
+      ));
+      await _sharePdf(await pdf.save(), 'employee_report_${emp['name'] ?? 'emp'}.pdf');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _exportExcel() async {
+    setState(() => _loading = true);
+    final emp = _selectedEmp;
+    if (emp == null) { setState(() => _loading = false); return; }
+    try {
+      final excel = Excel.createExcel();
+      excel.rename('Sheet1', 'Attendance');
+
+      // Attendance sheet
+      final attSheet = excel['Attendance'];
+      _excelHeader(attSheet, ['Date', 'Check In', 'Check Out', 'Hours', 'Status']);
+      for (var ri = 1; ri <= _attendance.length; ri++) {
+        final r = _attendance[ri - 1];
+        _excelRow(attSheet, [
+          TextCellValue(r['date'] ?? ''),
+          TextCellValue(_fmtTimeLocal(r['checkIn'])),
+          TextCellValue(_fmtTimeLocal(r['checkOut'])),
+          TextCellValue(_calcHoursLocal(r['checkIn'], r['checkOut'])),
+          TextCellValue(_attendanceLabel(r['status'])),
+        ], ri);
+      }
+
+      // Leaves sheet
+      excel['Leaves'];
+      final leavesSheet = excel['Leaves'];
+      _excelHeader(leavesSheet, ['Type', 'From', 'To', 'Days', 'Status']);
+      for (var ri = 1; ri <= _leaves.length; ri++) {
+        final r = _leaves[ri - 1];
+        _excelRow(leavesSheet, [
+          TextCellValue(_leaveTypeLabel(r['type'])),
+          TextCellValue(_fmtDateLocal(r['startDate'])),
+          TextCellValue(_fmtDateLocal(r['endDate'])),
+          TextCellValue('${(r['durationDays'] ?? 0).toStringAsFixed(1)}'),
+          TextCellValue(_leaveStatusLabel(r['status'])),
+        ], ri);
+      }
+
+      // Tasks sheet
+      excel['Tasks'];
+      final tasksSheet = excel['Tasks'];
+      _excelHeader(tasksSheet, ['Task Name', 'Project', 'End Date', 'Plan Hrs', 'Actual Hrs']);
+      for (var ri = 1; ri <= _tasks.length; ri++) {
+        final t = _tasks[ri - 1];
+        _excelRow(tasksSheet, [
+          TextCellValue(t['title'] ?? ''),
+          TextCellValue(t['projectName'] ?? ''),
+          TextCellValue(_fmtDateLocal(t['endDate'])),
+          TextCellValue('${t['plannedHours'] ?? 0}h'),
+          TextCellValue('${t['actualHours'] ?? 0}h'),
+        ], ri);
+      }
+
+      await _shareExcel(excel, 'employee_report_${emp['name'] ?? 'emp'}.xlsx');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+}
+
+// ── Collapsible Section ────────────────────────────────────────────────────────
+class _CollapsibleSection extends StatelessWidget {
+  final String title;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final Widget child;
+
+  const _CollapsibleSection({
+    required this.title,
+    required this.expanded,
+    required this.onToggle,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    color: cs.onSurface,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expanded) ...[
+            Divider(height: 1, color: cs.outlineVariant),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: child,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // REUSABLE WIDGETS
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1050,6 +1709,8 @@ class _ClientsReportTab extends StatefulWidget {
 class _ClientsReportTabState extends State<_ClientsReportTab> {
   bool _loading = false;
   List<Map<String, dynamic>>? _data;
+  DateTime? _fromDate;
+  DateTime? _toDate;
 
   @override
   void initState() {
@@ -1069,18 +1730,50 @@ class _ClientsReportTabState extends State<_ClientsReportTab> {
     }
   }
 
+  List<Map<String, dynamic>> get _filtered {
+    var d = _data ?? [];
+    if (_fromDate != null || _toDate != null) {
+      d = d.where((e) {
+        final ts = e['createdAt'];
+        if (ts == null) return true;
+        final date = (ts as Timestamp).toDate();
+        if (_fromDate != null && date.isBefore(_fromDate!)) return false;
+        if (_toDate != null && date.isAfter(_toDate!.add(const Duration(days: 1)))) return false;
+        return true;
+      }).toList();
+    }
+    return d;
+  }
+
+  String get _periodLabel {
+    if (_fromDate == null && _toDate == null) return '';
+    final from = _fromDate != null
+        ? '${_fromDate!.day.toString().padLeft(2, '0')}/${_fromDate!.month.toString().padLeft(2, '0')}/${_fromDate!.year}'
+        : '—';
+    final to = _toDate != null
+        ? '${_toDate!.day.toString().padLeft(2, '0')}/${_toDate!.month.toString().padLeft(2, '0')}/${_toDate!.year}'
+        : '—';
+    return 'Period: $from — $to';
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = _data;
     if (data == null) return const Center(child: CircularProgressIndicator());
+    final filtered = _filtered;
 
     // نجيب أسماء الـ clients المرتبطين من clients collection
     return _ClientsReportBody(
       officeId: widget.user.officeId,
-      clientUsers: data,
+      clientUsers: filtered,
       loading: _loading,
-      onExportPdf: () => _exportPdf(data),
-      onExportExcel: () => _exportExcel(data),
+      fromDate: _fromDate,
+      toDate: _toDate,
+      onFromChanged: (d) => setState(() => _fromDate = d),
+      onToChanged: (d) => setState(() => _toDate = d),
+      onClearDates: () => setState(() { _fromDate = null; _toDate = null; }),
+      onExportPdf: () => _exportPdf(filtered),
+      onExportExcel: () => _exportExcel(filtered),
     );
   }
 
@@ -1093,7 +1786,7 @@ class _ClientsReportTabState extends State<_ClientsReportTab> {
           pageFormat: PdfPageFormat.a4.landscape,
           margin: const pw.EdgeInsets.all(24),
           build: (ctx) => [
-            _pdfHeader('Clients Report'),
+            _pdfHeader('Clients Report', period: _periodLabel),
             pw.SizedBox(height: 12),
             pw.Table.fromTextArray(
               headers: ['Code', 'Name', 'Email', 'Phone', 'Status'],
@@ -1162,6 +1855,11 @@ class _ClientsReportBody extends StatelessWidget {
   final String officeId;
   final List<Map<String, dynamic>> clientUsers;
   final bool loading;
+  final DateTime? fromDate;
+  final DateTime? toDate;
+  final ValueChanged<DateTime?> onFromChanged;
+  final ValueChanged<DateTime?> onToChanged;
+  final VoidCallback onClearDates;
   final Future<void> Function() onExportPdf;
   final Future<void> Function() onExportExcel;
 
@@ -1171,12 +1869,23 @@ class _ClientsReportBody extends StatelessWidget {
     required this.loading,
     required this.onExportPdf,
     required this.onExportExcel,
+    this.fromDate,
+    this.toDate,
+    required this.onFromChanged,
+    required this.onToChanged,
+    required this.onClearDates,
   });
 
   @override
   Widget build(BuildContext context) {
     return _ReportLayout(
-      filters: const SizedBox.shrink(),
+      filters: _DateRangePicker(
+        fromDate: fromDate,
+        toDate: toDate,
+        onFromChanged: onFromChanged,
+        onToChanged: onToChanged,
+        onClear: onClearDates,
+      ),
       summary: _SummaryRow(
         items: [
           _SI(
@@ -1554,6 +2263,130 @@ class _Pill extends StatelessWidget {
   }
 }
 
+// ── Date Range Picker ─────────────────────────────────────────────────────────
+class _DateRangePicker extends StatelessWidget {
+  final DateTime? fromDate;
+  final DateTime? toDate;
+  final ValueChanged<DateTime?> onFromChanged;
+  final ValueChanged<DateTime?> onToChanged;
+  final VoidCallback onClear;
+
+  const _DateRangePicker({
+    required this.fromDate,
+    required this.toDate,
+    required this.onFromChanged,
+    required this.onToChanged,
+    required this.onClear,
+  });
+
+  String _fmt(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  Future<void> _pickFrom(BuildContext context) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: fromDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) onFromChanged(picked);
+  }
+
+  Future<void> _pickTo(BuildContext context) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: toDate ?? DateTime.now(),
+      firstDate: fromDate ?? DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) onToChanged(picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final hasFilter = fromDate != null || toDate != null;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _DateBtn(
+          label: fromDate != null ? 'From: ${_fmt(fromDate!)}' : 'From: —',
+          icon: Icons.calendar_today_outlined,
+          active: fromDate != null,
+          onTap: () => _pickFrom(context),
+        ),
+        _DateBtn(
+          label: toDate != null ? 'To: ${_fmt(toDate!)}' : 'To: —',
+          icon: Icons.event_outlined,
+          active: toDate != null,
+          onTap: () => _pickTo(context),
+        ),
+        if (hasFilter)
+          TextButton.icon(
+            onPressed: onClear,
+            icon: Icon(Icons.clear_rounded, size: 14, color: cs.error),
+            label: Text('Clear', style: TextStyle(fontSize: 12, color: cs.error)),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _DateBtn extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+  const _DateBtn({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: active
+              ? cs.primary.withValues(alpha: 0.12)
+              : cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: active ? cs.primary : cs.outlineVariant,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: active ? cs.primary : cs.onSurface),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: active ? cs.primary : cs.onSurface,
+                fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MonthPicker extends StatelessWidget {
   final DateTime selected;
   final ValueChanged<DateTime> onChanged;
@@ -1626,7 +2459,7 @@ class _MonthPicker extends StatelessWidget {
 // HELPERS
 // ══════════════════════════════════════════════════════════════════════════════
 
-pw.Widget _pdfHeader(String title) => pw.Column(
+pw.Widget _pdfHeader(String title, {String period = ''}) => pw.Column(
   crossAxisAlignment: pw.CrossAxisAlignment.start,
   children: [
     pw.Text(
@@ -1638,6 +2471,11 @@ pw.Widget _pdfHeader(String title) => pw.Column(
       ),
     ),
     pw.SizedBox(height: 4),
+    if (period.isNotEmpty)
+      pw.Text(
+        period,
+        style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+      ),
     pw.Text(
       'Generated: ${_fmtNow()}',
       style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
@@ -1742,10 +2580,12 @@ String _statusLabel(String? s) =>
     (s ?? '—');
 String _taskStatusLabel(String? s) =>
     const {
-      'not_started': 'Not Started',
-      'in_progress': 'In Progress',
-      'under_review': 'Under Review',
-      'completed': 'Completed',
+      'not_started':        'Not Started',
+      'in_progress':        'In Progress',
+      'team_leader_review': 'TL Review',
+      'qc_review':          'QC Review',
+      'client_review':      'Client Review',
+      'completed':          'Completed',
     }[s] ??
     (s ?? '—');
 String _attendanceLabel(String? s) =>

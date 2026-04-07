@@ -449,6 +449,11 @@ class _MyTasksTrackerList extends ConsumerWidget {
 
         List<TaskModel> active;
 
+        int _sortTasks(TaskModel a, TaskModel b) {
+          final p = a.priorityOrder.compareTo(b.priorityOrder);
+          return p != 0 ? p : a.endDate.compareTo(b.endDate);
+        }
+
         if (isEngineer) {
           // Engineer only sees their own turn: not_started + in_progress
           // Submitted tasks (team_leader_review / qc_review / client_review) → All Tasks tab
@@ -457,7 +462,7 @@ class _MyTasksTrackerList extends ConsumerWidget {
                   (t.assignedEngineerIds as List<dynamic>? ?? []).contains(uid) &&
                   (t.status == 'not_started' || t.status == 'in_progress'))
               .toList()
-            ..sort((a, b) => a.endDate.compareTo(b.endDate));
+            ..sort(_sortTasks);
         } else if (isTeamLeader) {
           // TL sees tasks pending their action (team_leader_review)
           // + tasks still being worked on in their projects (so they can track)
@@ -468,7 +473,7 @@ class _MyTasksTrackerList extends ConsumerWidget {
                    t.status == 'in_progress' ||
                    t.status == 'team_leader_review'))
               .toList()
-            ..sort((a, b) => a.endDate.compareTo(b.endDate));
+            ..sort(_sortTasks);
         } else if (isReviewer) {
           // QC sees tasks pending their review action
           active = tasks
@@ -476,19 +481,19 @@ class _MyTasksTrackerList extends ConsumerWidget {
                   t.reviewerId == uid &&
                   t.status == 'qc_review')
               .toList()
-            ..sort((a, b) => a.endDate.compareTo(b.endDate));
+            ..sort(_sortTasks);
         } else if (isDC) {
           // DC sees tasks ready to dispatch to client
           active = tasks
               .where((t) => t.status == 'client_review')
               .toList()
-            ..sort((a, b) => a.endDate.compareTo(b.endDate));
+            ..sort(_sortTasks);
         } else {
           // Client / others — show all non-completed
           active = tasks
               .where((t) => t.status != 'completed')
               .toList()
-            ..sort((a, b) => a.endDate.compareTo(b.endDate));
+            ..sort(_sortTasks);
         }
 
         if (active.isEmpty) {
@@ -1007,6 +1012,8 @@ class _TaskCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  _PriorityBadge(priority: task.priority),
+                  const SizedBox(width: 6),
                   _StatusBadge(status: task.status),
                 ],
               ),
@@ -1836,6 +1843,36 @@ class _StatusBadge extends StatelessWidget {
           fontSize: 11,
           fontWeight: FontWeight.bold,
         ),
+      ),
+    );
+  }
+}
+
+// ── Priority Badge ────────────────────────────────────────────────────────────
+class _PriorityBadge extends StatelessWidget {
+  final String priority;
+  const _PriorityBadge({required this.priority});
+
+  @override
+  Widget build(BuildContext context) {
+    // لا تعرض شيء للأولوية العادية لتوفير المساحة
+    if (priority == 'normal') return const SizedBox.shrink();
+    final (color, label) = switch (priority) {
+      'urgent' => (Colors.red, 'Urgent'),
+      'high'   => (Colors.orange, 'High'),
+      'low'    => (Colors.grey, 'Low'),
+      _        => (Colors.blue, priority),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
       ),
     );
   }

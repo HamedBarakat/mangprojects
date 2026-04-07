@@ -10,6 +10,8 @@ import '../controllers/project_providers.dart';
 import 'task_details_screen.dart';
 import 'project_details_screen.dart';
 import '../../data/models/project_model.dart';
+import '../../../employees/presentation/controllers/employee_providers.dart';
+import '../../../employees/data/models/employee_model.dart';
 
 class ManagementDashboardScreen extends ConsumerWidget {
   const ManagementDashboardScreen({super.key});
@@ -21,6 +23,7 @@ class ManagementDashboardScreen extends ConsumerWidget {
     final allTasksAsync = ref.watch(allOfficeTasksProvider);
     final overdueAsync = ref.watch(overdueTasksProvider);
     final projectsAsync = ref.watch(projectsProvider);
+    final employeesAsync = ref.watch(employeesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -40,13 +43,25 @@ class ManagementDashboardScreen extends ConsumerWidget {
           for (final t in allTasks) {
             byStatus[t.status] = (byStatus[t.status] ?? 0) + 1;
           }
-          final overdue = overdueAsync.value ?? [];
+          // رتب المتأخرة حسب الأولوية أولاً ثم تاريخ الانتهاء
+          final overdue = List<TaskModel>.from(overdueAsync.value ?? <TaskModel>[])
+            ..sort((a, b) {
+              final p = a.priorityOrder.compareTo(b.priorityOrder);
+              return p != 0 ? p : a.endDate.compareTo(b.endDate);
+            });
+          final urgentCount = overdue.where((t) => t.priority == 'urgent').length;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 80),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ── Urgent warning banner ──────────────────────────────────
+                if (urgentCount > 0) ...[
+                  _UrgentBanner(count: urgentCount),
+                  const SizedBox(height: 16),
+                ],
+
                 // ── Overview stat cards ────────────────────────────────────
                 _SectionHeader(title: 'Task Overview'),
                 const SizedBox(height: 12),
@@ -58,6 +73,29 @@ class ManagementDashboardScreen extends ConsumerWidget {
                   _OverdueSection(tasks: overdue, ref: ref, user: user),
                   const SizedBox(height: 24),
                 ],
+
+                // ── Contracts Expiring ─────────────────────────────────────
+                ...employeesAsync.when(
+                  loading: () => [],
+                  error: (_, _) => [],
+                  data: (employees) {
+                    final expiring = employees
+                        .where((e) =>
+                            e.isActive &&
+                            (e.isContractExpiringSoon || e.isContractExpired))
+                        .toList()
+                      ..sort((a, b) {
+                        final aDate = a.contractEndDate ?? DateTime(9999);
+                        final bDate = b.contractEndDate ?? DateTime(9999);
+                        return aDate.compareTo(bDate);
+                      });
+                    if (expiring.isEmpty) return [];
+                    return [
+                      _ContractsExpiringSection(employees: expiring),
+                      const SizedBox(height: 24),
+                    ];
+                  },
+                ),
 
                 // ── Task status breakdown by project ───────────────────────
                 _SectionHeader(title: 'By Project'),
@@ -184,6 +222,41 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+// ── Urgent Banner ─────────────────────────────────────────────────────────────
+class _UrgentBanner extends StatelessWidget {
+  final int count;
+  const _UrgentBanner({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.priority_high_rounded, color: Colors.red, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$count urgent task${count == 1 ? '' : 's'} overdue — immediate attention required!',
+              style: const TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Overdue Section ───────────────────────────────────────────────────────────
 class _OverdueSection extends StatelessWidget {
   final List<TaskModel> tasks;
@@ -292,16 +365,56 @@ class _OverdueTaskTile extends StatelessWidget {
         ),
         child: Row(
           children: [
+            // مؤشر الأولوية — أحمر للعاجل، برتقالي للعالي، رمادي للباقي
             Container(
               width: 6, height: 6,
-              decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                color: task.priority == 'urgent'
+                    ? Colors.red
+                    : task.priority == 'high'
+                        ? Colors.orange
+                        : AppColors.error,
+                shape: BoxShape.circle,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(task.title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: cs.onSurface)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(task.title,
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: cs.onSurface)),
+                      ),
+                      if (task.priority == 'urgent') ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red.withValues(alpha: 0.4)),
+                          ),
+                          child: const Text('Urgent',
+                              style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                      ] else if (task.priority == 'high') ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+                          ),
+                          child: const Text('High',
+                              style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ],
+                  ),
                   Text('${task.projectName} · ${task.teamLeaderName}',
                       style: TextStyle(color: cs.subtleText, fontSize: 11)),
                 ],
@@ -520,6 +633,85 @@ class _PendingReviewList extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ── Contracts Expiring Section ────────────────────────────────────────────────
+class _ContractsExpiringSection extends StatelessWidget {
+  final List<EmployeeModel> employees;
+  const _ContractsExpiringSection({required this.employees});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeader(title: 'Contracts Expiring (${employees.length})'),
+        const SizedBox(height: 12),
+        ...employees.map((e) => _ContractTile(employee: e)),
+      ],
+    );
+  }
+}
+
+class _ContractTile extends StatelessWidget {
+  final EmployeeModel employee;
+  const _ContractTile({required this.employee});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isExpired = employee.isContractExpired;
+    final color = isExpired ? AppColors.error : AppColors.warning;
+    final endDate = employee.contractEndDate!;
+    final daysLeft = endDate.difference(DateTime.now()).inDays;
+    final label = isExpired
+        ? 'Expired ${(-daysLeft)} day${-daysLeft == 1 ? '' : 's'} ago'
+        : 'Expires in $daysLeft day${daysLeft == 1 ? '' : 's'}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: color.withValues(alpha: 0.12),
+            child: Text(
+              employee.name.isNotEmpty ? employee.name[0].toUpperCase() : '?',
+              style: TextStyle(color: color, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(employee.name,
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: cs.onSurface)),
+                Text(employee.jobTitleLabel,
+                    style: TextStyle(color: cs.subtleText, fontSize: 11)),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(label,
+                style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
     );
   }
 }

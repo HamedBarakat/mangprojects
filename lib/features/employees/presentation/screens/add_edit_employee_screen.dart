@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -56,6 +57,17 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
   bool _adminFlag = false;
   DateTime _joinDate = DateTime.now();
 
+  // ── Reporting Chain ────────────────────────────────────────────────────────
+  String? _reportToUserId;
+  String? _reportToName;
+  String? _reportToJobTitle;
+
+  // ── HR Fields ──────────────────────────────────────────────────────────────
+  String _contractType = 'permanent';
+  DateTime? _contractEndDate;
+  late TextEditingController _emergencyContactController;
+  late TextEditingController _nationalIdController;
+
   // ── Schedule & Leave Settings ──────────────────────────────────────────────
   int _annualLeaveDays = 21;
   bool _hasCustomSchedule = false;
@@ -96,6 +108,8 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
 
     _nameController = TextEditingController(text: e?.name ?? '');
     _emailController = TextEditingController(text: e?.email ?? '');
+    _emergencyContactController = TextEditingController(text: e?.emergencyContact ?? '');
+    _nationalIdController = TextEditingController(text: e?.nationalId ?? '');
     _passwordController = TextEditingController();
     _phoneController = TextEditingController(text: e?.phone ?? '');
     _addressController = TextEditingController(text: e?.address ?? '');
@@ -120,6 +134,13 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
       _jobTitleKey = e.jobTitle;
       _adminFlag = e.adminFlag;
       _linkedClientId = e.linkedClientId;
+      // Reporting chain
+      _reportToUserId = e.reportToUserId;
+      _reportToName = e.reportToName;
+      _reportToJobTitle = e.reportToJobTitle;
+      // HR fields
+      _contractType = e.contractType;
+      _contractEndDate = e.contractEndDate;
       // Schedule
       _annualLeaveDays = e.annualLeaveDays;
       _hasCustomSchedule = e.hasCustomSchedule;
@@ -183,6 +204,8 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
     _graduationYearController.dispose();
     _notesController.dispose();
     _employeeCodeController.dispose();
+    _emergencyContactController.dispose();
+    _nationalIdController.dispose();
     super.dispose();
   }
 
@@ -234,6 +257,15 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
           'isActive': _status == 'active',
           'notes': _notesController.text.trim(),
           'linkedClientId': _role == 'client' ? _linkedClientId : null,
+          'reportToUserId': _reportToUserId ?? '',
+          'reportToName': _reportToName ?? '',
+          'reportToJobTitle': _reportToJobTitle ?? '',
+          'contractType': _contractType,
+          'contractEndDate': _contractEndDate != null
+              ? Timestamp.fromDate(_contractEndDate!)
+              : null,
+          'emergencyContact': _emergencyContactController.text.trim(),
+          'nationalId': _nationalIdController.text.trim(),
           ...scheduleData,
         });
       } else {
@@ -256,9 +288,16 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
           notes: _notesController.text.trim(),
           linkedClientId: _role == 'client' ? _linkedClientId : null,
         );
-        // Write schedule fields after user created
+        // Write schedule and HR fields after user created
         if (uid != null) {
-          await repo.updateEmployee(uid, scheduleData);
+          await repo.updateEmployee(uid, {
+            ...scheduleData,
+            'contractType': _contractType,
+            if (_contractEndDate != null)
+              'contractEndDate': Timestamp.fromDate(_contractEndDate!),
+            'emergencyContact': _emergencyContactController.text.trim(),
+            'nationalId': _nationalIdController.text.trim(),
+          });
         }
       }
 
@@ -403,6 +442,20 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
             ),
             const SizedBox(height: 12),
 
+            // ── Reports To dropdown ──────────────────────────────────────
+            if (!_isClientMode)
+              _ReportsToDropdown(
+                officeId: ref.read(currentUserProvider).value?.officeId ?? '',
+                excludeUid: widget.employee?.uid,
+                selectedUserId: _reportToUserId,
+                onChanged: (uid, name, jobTitle) => setState(() {
+                  _reportToUserId = uid;
+                  _reportToName = name;
+                  _reportToJobTitle = jobTitle;
+                }),
+              ),
+            if (!_isClientMode) const SizedBox(height: 12),
+
             if (widget.lockRole)
               _LockedRoleField(value: _role)
             else
@@ -529,7 +582,21 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
               onDayOverridesChanged: (v) => setState(() => _dayOverrides = v),
               onExemptFromRulesChanged: (v) => setState(() => _exemptFromRules = v),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
+
+            // ── HR Fields ────────────────────────────────────────────────
+            if (!_isClientMode) ...[
+              _HrFieldsSection(
+                contractType: _contractType,
+                contractEndDate: _contractEndDate,
+                emergencyContactController: _emergencyContactController,
+                nationalIdController: _nationalIdController,
+                onContractTypeChanged: (v) => setState(() => _contractType = v),
+                onContractEndDateChanged: (v) =>
+                    setState(() => _contractEndDate = v),
+              ),
+              const SizedBox(height: 32),
+            ],
 
             SizedBox(
               width: double.infinity,
@@ -1131,6 +1198,150 @@ class _GroupedJobTitleDropdown extends ConsumerWidget {
               label,
               style: const TextStyle(fontSize: 13),
               overflow: TextOverflow.ellipsis,
+            ),
+          );
+        }).toList();
+      },
+    );
+  }
+}
+
+// ── Reports To Dropdown ───────────────────────────────────────────────────────
+class _ReportsToDropdown extends ConsumerStatefulWidget {
+  final String officeId;
+  final String? excludeUid;
+  final String? selectedUserId;
+  final void Function(String? uid, String? name, String? jobTitle) onChanged;
+
+  const _ReportsToDropdown({
+    required this.officeId,
+    required this.onChanged,
+    this.excludeUid,
+    this.selectedUserId,
+  });
+
+  @override
+  ConsumerState<_ReportsToDropdown> createState() => _ReportsToDropdownState();
+}
+
+class _ReportsToDropdownState extends ConsumerState<_ReportsToDropdown> {
+  List<Map<String, String>> _employees = [];
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .where('officeId', isEqualTo: widget.officeId)
+        .where('isActive', isEqualTo: true)
+        .get();
+    if (!mounted) return;
+    final list = snap.docs
+        .where((d) => d.id != widget.excludeUid)
+        .map((d) => {
+              'uid': d.id,
+              'name': (d.data()['name'] as String? ?? ''),
+              'jobTitle': (d.data()['jobTitle'] as String? ?? ''),
+            })
+        .toList()
+      ..sort((a, b) => a['name']!.compareTo(b['name']!));
+    setState(() {
+      _employees = list;
+      _loaded = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    if (!_loaded) {
+      return Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            Icon(Icons.supervisor_account_outlined, color: cs.primary),
+            const SizedBox(width: 12),
+            Text('Loading...', style: TextStyle(color: cs.onSurface.withOpacity(0.5))),
+          ],
+        ),
+      );
+    }
+
+    // Safe value check
+    final validUid = _employees.any((e) => e['uid'] == widget.selectedUserId)
+        ? widget.selectedUserId
+        : null;
+
+    return DropdownButtonFormField<String>(
+      initialValue: validUid,
+      isExpanded: true,
+      onChanged: (uid) {
+        if (uid == null || uid == '__none__') {
+          widget.onChanged(null, null, null);
+        } else {
+          final emp = _employees.firstWhere((e) => e['uid'] == uid,
+              orElse: () => {});
+          widget.onChanged(emp['uid'], emp['name'], emp['jobTitle']);
+        }
+      },
+      decoration: InputDecoration(
+        labelText: 'Reports To (Direct Manager)',
+        prefixIcon: Icon(Icons.supervisor_account_outlined, color: cs.primary),
+        filled: true,
+        fillColor: cs.surfaceContainerHighest,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: cs.primary, width: 2),
+        ),
+      ),
+      borderRadius: BorderRadius.circular(14),
+      items: [
+        const DropdownMenuItem<String>(
+          value: '__none__',
+          child: Text('— None (Top Level)'),
+        ),
+        ..._employees.map(
+          (e) => DropdownMenuItem<String>(
+            value: e['uid'],
+            child: Text(
+              '${e['name']} — ${JobTitles.labelOf(e['jobTitle'] ?? '')}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      ],
+      selectedItemBuilder: (context) {
+        final all = ['__none__', ..._employees.map((e) => e['uid']!)];
+        return all.map((uid) {
+          if (uid == '__none__') {
+            return const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('— None (Top Level)', style: TextStyle(fontSize: 13)),
+            );
+          }
+          final emp = _employees.firstWhere((e) => e['uid'] == uid,
+              orElse: () => {'name': '', 'jobTitle': ''});
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${emp['name']} — ${JobTitles.labelOf(emp['jobTitle'] ?? '')}',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
             ),
           );
         }).toList();
@@ -1845,6 +2056,172 @@ class _DateField extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── HR Fields Section ─────────────────────────────────────────────────────────
+class _HrFieldsSection extends StatelessWidget {
+  final String contractType;
+  final DateTime? contractEndDate;
+  final TextEditingController emergencyContactController;
+  final TextEditingController nationalIdController;
+  final ValueChanged<String> onContractTypeChanged;
+  final ValueChanged<DateTime?> onContractEndDateChanged;
+
+  const _HrFieldsSection({
+    required this.contractType,
+    required this.contractEndDate,
+    required this.emergencyContactController,
+    required this.nationalIdController,
+    required this.onContractTypeChanged,
+    required this.onContractEndDateChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── عنوان القسم ──────────────────────────────────────────────────
+        Row(
+          children: [
+            Icon(Icons.badge_outlined, size: 18, color: cs.primary),
+            const SizedBox(width: 8),
+            Text(
+              'HR Information',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                color: cs.onSurface,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // ── نوع العقد ────────────────────────────────────────────────────
+        Text('Contract Type',
+            style: TextStyle(color: cs.onSurface.withOpacity(0.6), fontSize: 12)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            _ContractChip(label: 'Permanent', value: 'permanent',
+                selected: contractType, onTap: onContractTypeChanged),
+            _ContractChip(label: 'Contract', value: 'contract',
+                selected: contractType, onTap: onContractTypeChanged),
+            _ContractChip(label: 'Part Time', value: 'part_time',
+                selected: contractType, onTap: onContractTypeChanged),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // ── تاريخ انتهاء العقد (للعقود المؤقتة فقط) ─────────────────────
+        if (contractType != 'permanent') ...[
+          InkWell(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: contractEndDate ?? DateTime.now().add(const Duration(days: 365)),
+                firstDate: DateTime.now(),
+                lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
+              );
+              if (picked != null) onContractEndDateChanged(picked);
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                border: Border.all(color: cs.outline),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.event_outlined, size: 18, color: cs.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Contract End Date',
+                            style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.6))),
+                        Text(
+                          contractEndDate != null
+                              ? '${contractEndDate!.day}/${contractEndDate!.month}/${contractEndDate!.year}'
+                              : 'Tap to select',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: contractEndDate == null
+                                ? cs.onSurface.withOpacity(0.4)
+                                : cs.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (contractEndDate != null)
+                    IconButton(
+                      icon: const Icon(Icons.clear, size: 16),
+                      onPressed: () => onContractEndDateChanged(null),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // ── رقم الهوية الوطنية ──────────────────────────────────────────
+        TextFormField(
+          controller: nationalIdController,
+          decoration: InputDecoration(
+            labelText: 'National ID',
+            prefixIcon: Icon(Icons.credit_card_outlined, color: cs.primary),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── جهة الاتصال للطوارئ ─────────────────────────────────────────
+        TextFormField(
+          controller: emergencyContactController,
+          decoration: InputDecoration(
+            labelText: 'Emergency Contact',
+            prefixIcon: Icon(Icons.emergency_outlined, color: cs.primary),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ContractChip extends StatelessWidget {
+  final String label, value, selected;
+  final ValueChanged<String> onTap;
+  const _ContractChip({
+    required this.label,
+    required this.value,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isSelected = value == selected;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) => onTap(value),
+      selectedColor: cs.primary,
+      labelStyle: TextStyle(
+        color: isSelected ? cs.onPrimary : cs.onSurface,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
     );
   }

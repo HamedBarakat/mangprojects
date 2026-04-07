@@ -5,6 +5,8 @@ import '../../../../features/home/presentation/controllers/home_providers.dart';
 import '../controllers/leave_providers.dart';
 import '../../data/leave_repository.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../features/office/data/models/hr_policy_model.dart';
+import '../../../../features/office/presentation/controllers/hr_policy_providers.dart';
 
 class SubmitLeaveScreen extends ConsumerStatefulWidget {
   const SubmitLeaveScreen({super.key});
@@ -29,15 +31,39 @@ class _SubmitLeaveScreenState extends ConsumerState<SubmitLeaveScreen> {
     super.dispose();
   }
 
-  double get _computedDays {
+  // يحسب أيام العمل بناءً على جدول الموظف المخصص أو سياسة المكتب
+  double _computedDays(List<String> workDays) {
     if (_type == 'permission') return 0;
+    // تحويل أسماء الأيام إلى أرقام weekday الخاصة بـ DateTime
+    const dayToWeekday = {
+      'sun': DateTime.sunday,
+      'mon': DateTime.monday,
+      'tue': DateTime.tuesday,
+      'wed': DateTime.wednesday,
+      'thu': DateTime.thursday,
+      'fri': DateTime.friday,
+      'sat': DateTime.saturday,
+    };
+    final workWeekdays = workDays
+        .map((d) => dayToWeekday[d])
+        .whereType<int>()
+        .toSet();
     int days = 0;
     for (var d = _startDate;
         !d.isAfter(_endDate);
         d = d.add(const Duration(days: 1))) {
-      if (d.weekday != DateTime.friday && d.weekday != DateTime.saturday) days++;
+      if (workWeekdays.contains(d.weekday)) days++;
     }
     return days.toDouble();
+  }
+
+  /// يرجع الجدول الفعلي للموظف (مخصص أو جدول المكتب)
+  List<String> _effectiveWorkDays(List<String> policyWorkDays) {
+    final user = ref.read(currentUserProvider).value;
+    if (user != null && user.hasCustomSchedule && user.customWorkDays.isNotEmpty) {
+      return user.customWorkDays;
+    }
+    return policyWorkDays;
   }
 
   Future<void> _pickDate(bool isStart) async {
@@ -65,7 +91,12 @@ class _SubmitLeaveScreenState extends ConsumerState<SubmitLeaveScreen> {
     final user = ref.read(currentUserProvider).value;
     if (user == null) return;
 
-    if (_computedDays == 0 && _type != 'permission') {
+    // احسب أيام العمل باستخدام الجدول الفعلي
+    final policy = ref.read(hrPolicyProvider).value ?? HRPolicyModel.defaults();
+    final workDays = _effectiveWorkDays(policy.workDays);
+    final computedDays = _computedDays(workDays);
+
+    if (computedDays == 0 && _type != 'permission') {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Selected dates include no working days')));
       return;
@@ -85,7 +116,7 @@ class _SubmitLeaveScreenState extends ConsumerState<SubmitLeaveScreen> {
             type: _type,
             startDate: _startDate,
             endDate: _type == 'permission' ? _startDate : _endDate,
-            durationDays: _computedDays,
+            durationDays: computedDays,
             durationHours: _type == 'permission' ? _durationHours : 0,
             reason: _reasonCtrl.text.trim(),
             annualBalance: balance['total']!,
@@ -115,6 +146,9 @@ class _SubmitLeaveScreenState extends ConsumerState<SubmitLeaveScreen> {
     final user = ref.watch(currentUserProvider).value;
     final chainTitles =
         LeaveRepository.approvalChainFor(user?.jobTitle ?? '');
+    // جدول العمل: مخصص للموظف أو من سياسة المكتب
+    final policy = ref.watch(hrPolicyProvider).value ?? HRPolicyModel.defaults();
+    final effectiveWorkDays = _effectiveWorkDays(policy.workDays);
 
     return Scaffold(
       appBar: AppBar(
@@ -205,7 +239,7 @@ class _SubmitLeaveScreenState extends ConsumerState<SubmitLeaveScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'Working days: ${_computedDays.toInt()}',
+                  'Working days: ${_computedDays(effectiveWorkDays).toInt()}',
                   style: TextStyle(
                       color: cs.primary, fontWeight: FontWeight.w600),
                 ),

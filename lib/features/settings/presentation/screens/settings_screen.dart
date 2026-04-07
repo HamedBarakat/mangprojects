@@ -18,6 +18,7 @@ import '../../../../features/office/data/models/hr_policy_model.dart';
 import '../../../office/presentation/screens/office_lists_screen.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/theme_provider.dart';
+import 'org_chart_screen.dart';
 
 // ── Office stream provider ────────────────────────────────────────────────────
 final officeStreamProvider = StreamProvider<OfficeModel?>((ref) {
@@ -111,6 +112,17 @@ class SettingsScreen extends ConsumerWidget {
                   MaterialPageRoute(
                     builder: (_) => const JobTitlesManagementScreen(),
                   ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              _SettingsTile(
+                icon: Icons.account_tree_outlined,
+                label: 'Org Chart',
+                iconColor: AppColors.success,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const OrgChartScreen()),
                 ),
               ),
               const SizedBox(height: 28),
