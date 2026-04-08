@@ -30,6 +30,16 @@ final _projectTasksProvider = StreamProvider.family<List<TaskModel>, String>(
       ),
 );
 
+/// All tasks for the project — used by _ReportTab (no status filter).
+final _allProjectTasksProvider = StreamProvider.family<List<TaskModel>, String>(
+  (ref, projectId) => FirebaseFirestore.instance
+      .collection('tasks')
+      .where('projectId', isEqualTo: projectId)
+      .orderBy('createdAt', descending: false)
+      .snapshots()
+      .map((s) => s.docs.map((d) => TaskModel.fromFirestore(d)).toList()),
+);
+
 final _projectDetailProvider =
     StreamProvider.family<Map<String, dynamic>?, String>(
       (ref, projectId) => FirebaseFirestore.instance
@@ -41,11 +51,13 @@ final _projectDetailProvider =
 
 class ClientProjectDetailScreen extends ConsumerStatefulWidget {
   final String projectId, projectName, clientId;
+  final int initialTabIndex;
   const ClientProjectDetailScreen({
     super.key,
     required this.projectId,
     required this.projectName,
     required this.clientId,
+    this.initialTabIndex = 0,
   });
 
   @override
@@ -61,7 +73,11 @@ class _ClientProjectDetailScreenState
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 2),
+    );
   }
 
   @override
@@ -1495,27 +1511,31 @@ class _ReportTabState extends State<_ReportTab>
     return Consumer(
       builder: (context, ref, _) {
         final cs = Theme.of(context).colorScheme;
-        final tasksAsync = ref.watch(_projectTasksProvider(widget.projectId));
+        final tasksAsync = ref.watch(_allProjectTasksProvider(widget.projectId));
         return tasksAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('$e')),
           data: (tasks) {
-            final total = tasks.length;
-            final completed = tasks
+            // Filter to tasks for this client
+            final clientTasks = tasks
+                .where((t) => t.clientId == widget.clientId || t.clientId.isEmpty)
+                .toList();
+            final total = clientTasks.length;
+            final completed = clientTasks
                 .where((t) => t.status == 'completed')
                 .length;
-            final inProg = tasks.where((t) => t.status == 'in_progress').length;
-            final teamLeadReview = tasks
+            final inProg = clientTasks.where((t) => t.status == 'in_progress').length;
+            final teamLeadReview = clientTasks
                 .where((t) => t.status == 'team_leader_review')
                 .length;
-            final qcReview = tasks.where((t) => t.status == 'qc_review').length;
-            final clientReview = tasks
+            final qcReview = clientTasks.where((t) => t.status == 'qc_review').length;
+            final clientReview = clientTasks
                 .where((t) => t.status == 'client_review')
                 .length;
-            final notStart = tasks
+            final notStart = clientTasks
                 .where((t) => t.status == 'not_started')
                 .length;
-            final allComments = tasks.expand((t) => t.clientComments).toList();
+            final allComments = clientTasks.expand((t) => t.clientComments).toList();
             final totalNotes = allComments.length;
             final resolvedNotes = allComments
                 .where((c) => c['isResolved'] == true)
@@ -1524,6 +1544,29 @@ class _ReportTabState extends State<_ReportTab>
             final progress =
                 (widget.project?['completionPercentage'] as num?)?.toDouble() ??
                 0.0;
+
+            // Discipline breakdown
+            final Map<String, List<TaskModel>> byDiscipline = {};
+            for (final t in clientTasks) {
+              final disc = t.discipline.isEmpty ? 'Unspecified' : t.discipline;
+              byDiscipline.putIfAbsent(disc, () => []).add(t);
+            }
+
+            // Tasks in client_review
+            final clientReviewTasks = clientTasks
+                .where((t) => t.status == 'client_review')
+                .toList();
+
+            // Completed tasks
+            final completedTasks = clientTasks
+                .where((t) => t.status == 'completed')
+                .toList();
+
+            // DC Timeline: tasks with dcSentAt set
+            final dcSentTasks = clientTasks
+                .where((t) => t.dcSentAt != null)
+                .toList()
+              ..sort((a, b) => b.dcSentAt!.compareTo(a.dcSentAt!));
 
             return ListView(
               padding: const EdgeInsets.all(16),
@@ -1560,7 +1603,7 @@ class _ReportTabState extends State<_ReportTab>
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        onPressed: _exporting ? null : () => _exportPdf(tasks),
+                        onPressed: _exporting ? null : () => _exportPdf(clientTasks),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1596,7 +1639,7 @@ class _ReportTabState extends State<_ReportTab>
                         ),
                         onPressed: _exporting
                             ? null
-                            : () => _exportExcel(tasks),
+                            : () => _exportExcel(clientTasks),
                       ),
                     ),
                   ],
@@ -1833,13 +1876,180 @@ class _ReportTabState extends State<_ReportTab>
                           ],
                         ),
                 ),
+                // ── Discipline Breakdown ──────────────────────────────
+                if (byDiscipline.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _ReportSection(
+                    title: 'Discipline Breakdown',
+                    icon: Icons.schema_outlined,
+                    child: Column(
+                      children: byDiscipline.entries.map((entry) {
+                        final discTasks = entry.value;
+                        final discTotal = discTasks.length;
+                        final discDone = discTasks.where((t) => t.status == 'completed').length;
+                        final discPct = discTotal > 0 ? discDone / discTotal : 0.0;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      entry.key,
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                  Text(
+                                    '$discDone/$discTotal done',
+                                    style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.55)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: discPct,
+                                  minHeight: 6,
+                                  backgroundColor: cs.surfaceContainerHighest,
+                                  valueColor: AlwaysStoppedAnimation(cs.primary),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+
+                // ── Tasks in Client Review ────────────────────────────
+                if (clientReviewTasks.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _ReportSection(
+                    title: 'Tasks Awaiting Your Review',
+                    icon: Icons.rate_review_outlined,
+                    child: Column(
+                      children: clientReviewTasks.map((t) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 8, height: 8,
+                              decoration: const BoxDecoration(color: Colors.teal, shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(t.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  if (t.discipline.isNotEmpty)
+                                    Text(t.discipline, style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.5))),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              'Round ${t.clientReviewRound}',
+                              style: TextStyle(fontSize: 11, color: Colors.teal, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      )).toList(),
+                    ),
+                  ),
+                ],
+
+                // ── Completed Tasks ───────────────────────────────────
+                if (completedTasks.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _ReportSection(
+                    title: 'Completed Tasks (${completedTasks.length})',
+                    icon: Icons.check_circle_outline,
+                    child: Column(
+                      children: completedTasks.map((t) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_circle, size: 14, color: Colors.green),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(t.title, style: const TextStyle(fontSize: 13),
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ),
+                            if (t.discipline.isNotEmpty)
+                              Text(t.discipline, style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.45))),
+                          ],
+                        ),
+                      )).toList(),
+                    ),
+                  ),
+                ],
+
+                // ── DC Timeline ───────────────────────────────────────
+                if (dcSentTasks.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _ReportSection(
+                    title: 'DC Dispatch Timeline',
+                    icon: Icons.send_outlined,
+                    child: Column(
+                      children: dcSentTasks.map((t) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Column(
+                              children: [
+                                Container(
+                                  width: 10, height: 10,
+                                  decoration: BoxDecoration(
+                                    color: cs.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(t.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Sent: ${_fmtDateTime(t.dcSentAt!)}',
+                                        style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.55)),
+                                      ),
+                                      if (t.dcSentByName.isNotEmpty) ...[
+                                        Text(' • ', style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.35))),
+                                        Text(t.dcSentByName, style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.55))),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )).toList(),
+                    ),
+                  ),
+                ],
+
+                // ── All Tasks ─────────────────────────────────────────
                 const SizedBox(height: 14),
-                if (tasks.isNotEmpty)
+                if (clientTasks.isNotEmpty)
                   _ReportSection(
                     title: 'All Tasks',
                     icon: Icons.list_alt_rounded,
                     child: Column(
-                      children: tasks.map((t) {
+                      children: clientTasks.map((t) {
                         final tNotes = t.clientComments.length;
                         final tResolved = t.clientComments
                             .where((c) => c['isResolved'] == true)

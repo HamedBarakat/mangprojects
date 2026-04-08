@@ -21,10 +21,11 @@ class ProjectsScreen extends ConsumerWidget {
     final isAdmin = user?.isAdmin ?? false;
     final isTeamLeader = user?.isTeamLeader ?? false;
 
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.slate900,
+      backgroundColor: cs.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: AppColors.slate850,
+        backgroundColor: cs.appBarBg,
         title: const Text('Projects'),
         actions: [
           if (isAdmin)
@@ -99,7 +100,7 @@ class _TeamLeaderProjectsViewState extends State<_TeamLeaderProjectsView>
     return Column(
       children: [
         Container(
-          color: AppColors.slate850,
+          color: Theme.of(context).colorScheme.appBarBg,
           child: TabBar(
             controller: _tab,
             tabs: const [
@@ -108,7 +109,7 @@ class _TeamLeaderProjectsViewState extends State<_TeamLeaderProjectsView>
             ],
           ),
         ),
-        Container(height: 1, color: AppColors.slate700),
+        Divider(height: 1, thickness: 1, color: Theme.of(context).colorScheme.dividerC),
         Expanded(
           child: TabBarView(
             controller: _tab,
@@ -142,7 +143,7 @@ class _ProjectsList extends ConsumerWidget {
       children: [
         // ── Filter Bar ────────────────────────────────────────────────
         Container(
-          color: AppColors.slate850,
+          color: Theme.of(context).colorScheme.appBarBg,
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           child: Column(
             children: [
@@ -221,7 +222,7 @@ class _ProjectsList extends ConsumerWidget {
           ),
         ),
 
-        Container(height: 1, color: AppColors.slate700),
+        Divider(height: 1, thickness: 1, color: Theme.of(context).colorScheme.dividerC),
 
         // ── List ──────────────────────────────────────────────────────
         Expanded(
@@ -242,12 +243,12 @@ class _ProjectsList extends ConsumerWidget {
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: AppColors.slate800,
+                          color: Theme.of(context).colorScheme.surfaceContainer,
                           shape: BoxShape.circle,
                           border: Border.all(color: Theme.of(context).colorScheme.border),
                         ),
-                        child: const Icon(Icons.business_center_outlined,
-                            size: 44, color: AppColors.slate500),
+                        child: Icon(Icons.business_center_outlined,
+                            size: 44, color: Theme.of(context).colorScheme.subtleText),
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -322,19 +323,19 @@ class _FilterChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected
                 ? color.withValues(alpha: 0.15)
-                : AppColors.slate800,
+                : Theme.of(context).colorScheme.surfaceContainer,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: selected
                   ? color.withValues(alpha: 0.6)
-                  : AppColors.slate600,
+                  : Theme.of(context).colorScheme.border,
               width: selected ? 1.5 : 1,
             ),
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? color : AppColors.slate400,
+              color: selected ? color : Theme.of(context).colorScheme.subtleText,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               fontSize: 12,
             ),

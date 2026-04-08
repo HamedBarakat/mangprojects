@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mang_projects/features/projects/presentation/screens/client_review_screen.dart';
 
 import '../../../../features/home/presentation/controllers/home_providers.dart';
+import 'client_project_detail_screen.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CLIENT PROJECTS PROVIDER
@@ -420,6 +421,39 @@ class _ProjectCard extends ConsumerWidget {
                         ),
                       ),
                       const Spacer(),
+                      InkWell(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ClientProjectDetailScreen(
+                              projectId: projectId,
+                              projectName: name,
+                              clientId: clientId,
+                              initialTabIndex: 2,
+                            ),
+                          ),
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.bar_chart_outlined, size: 14, color: cs.primary),
+                              const SizedBox(width: 3),
+                              Text(
+                                'Report',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       Text(
                         'View Details →',
                         style: TextStyle(

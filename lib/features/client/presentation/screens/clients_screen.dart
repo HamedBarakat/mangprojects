@@ -38,10 +38,11 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
     final clientsAsync = ref.watch(clientsStreamProvider);
     final employeesAsync = ref.watch(clientAccountsProvider);
 
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.slate900,
+      backgroundColor: cs.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: AppColors.slate850,
+        backgroundColor: cs.appBarBg,
         automaticallyImplyLeading: false,
         title: const Text('Clients'),
         actions: [
@@ -101,7 +102,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
     return Column(
       children: [
         Container(
-          color: AppColors.slate850,
+          color: Theme.of(context).colorScheme.appBarBg,
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           child: TextField(
             onChanged: (v) => setState(() => _recordsSearch = v.toLowerCase()),
@@ -112,7 +113,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
             ),
           ),
         ),
-        Container(height: 1, color: AppColors.slate700),
+        Divider(height: 1, thickness: 1, color: Theme.of(context).colorScheme.dividerC),
         Expanded(
           child: clientsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -162,7 +163,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
     return Column(
       children: [
         Container(
-          color: AppColors.slate850,
+          color: Theme.of(context).colorScheme.appBarBg,
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           child: TextField(
             onChanged: (v) => setState(() => _accountsSearch = v.toLowerCase()),
@@ -173,7 +174,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
             ),
           ),
         ),
-        Container(height: 1, color: AppColors.slate700),
+        Divider(height: 1, thickness: 1, color: Theme.of(context).colorScheme.dividerC),
         Expanded(
           child: employeesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -267,7 +268,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Select Client', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.slate100)),
+              const Text('Select Client', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               Flexible(
                 child: ListView.separated(
@@ -294,11 +295,11 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
                             ),
                           ),
                         ),
-                        title: Text(client.name, style: const TextStyle(color: AppColors.slate100)),
+                        title: Text(client.name),
                         subtitle: (client.email != null && client.email!.isNotEmpty)
-                            ? Text(client.email!, style: const TextStyle(color: AppColors.slate400))
+                            ? Text(client.email!, style: TextStyle(color: Theme.of(context).colorScheme.subtleText))
                             : ((client.phone != null && client.phone!.isNotEmpty)
-                                ? Text(client.phone!, style: const TextStyle(color: AppColors.slate400))
+                                ? Text(client.phone!, style: TextStyle(color: Theme.of(context).colorScheme.subtleText))
                                 : null),
                         onTap: () => Navigator.pop(ctx, client),
                       ),
@@ -346,7 +347,7 @@ class _ClientCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.cardBg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isActive ? AppColors.slate700 : AppColors.slate700.withOpacity(0.4)),
+          border: Border.all(color: isActive ? Theme.of(context).colorScheme.border : Theme.of(context).colorScheme.border.withOpacity(0.4)),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6, offset: const Offset(0, 2))],
         ),
         child: Row(
@@ -375,21 +376,21 @@ class _ClientCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(client.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.slate100)),
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Theme.of(context).colorScheme.onSurface)),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: isActive ? AppColors.success.withOpacity(0.1) : AppColors.slate600.withOpacity(0.3),
+                          color: isActive ? AppColors.success.withOpacity(0.1) : Theme.of(context).colorScheme.surfaceContainer,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: isActive ? AppColors.success.withOpacity(0.3) : AppColors.slate600),
+                          border: Border.all(color: isActive ? AppColors.success.withOpacity(0.3) : Theme.of(context).colorScheme.border),
                         ),
                         child: Text(
                           isActive ? 'Active' : 'Inactive',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            color: isActive ? AppColors.success : AppColors.slate400,
+                            color: isActive ? AppColors.success : Theme.of(context).colorScheme.subtleText,
                           ),
                         ),
                       ),
@@ -399,9 +400,9 @@ class _ClientCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.phone_outlined, size: 12, color: AppColors.slate500),
+                        Icon(Icons.phone_outlined, size: 12, color: Theme.of(context).colorScheme.subtleText),
                         const SizedBox(width: 4),
-                        Text(client.phone!, style: const TextStyle(fontSize: 12, color: AppColors.slate400)),
+                        Text(client.phone!, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.subtleText)),
                       ],
                     ),
                   ],
@@ -409,11 +410,11 @@ class _ClientCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.people_outline, size: 12, color: AppColors.slate500),
+                        Icon(Icons.people_outline, size: 12, color: Theme.of(context).colorScheme.subtleText),
                         const SizedBox(width: 4),
                         Text(
                           '${client.contacts.length} contact${client.contacts.length > 1 ? 's' : ''}',
-                          style: const TextStyle(fontSize: 12, color: AppColors.slate400),
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.subtleText),
                         ),
                       ],
                     ),
@@ -422,7 +423,7 @@ class _ClientCard extends StatelessWidget {
               ),
             ),
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert_rounded, color: AppColors.slate500),
+              icon: Icon(Icons.more_vert_rounded, color: Theme.of(context).colorScheme.subtleText),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               color: Theme.of(context).colorScheme.border,
               onSelected: (val) {
@@ -490,7 +491,7 @@ class _ClientAccountCard extends StatelessWidget {
               child: Center(
                 child: Text(
                   account.name.isNotEmpty ? account.name[0].toUpperCase() : '?',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.slate300),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
                 ),
               ),
             ),
@@ -503,7 +504,7 @@ class _ClientAccountCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(account.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.slate100)),
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Theme.of(context).colorScheme.onSurface)),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -523,10 +524,10 @@ class _ClientAccountCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 3),
-                  Text(account.email, style: const TextStyle(fontSize: 12, color: AppColors.slate400)),
+                  Text(account.email, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.subtleText)),
                   if (account.phone.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text(account.phone, style: const TextStyle(fontSize: 12, color: AppColors.slate500)),
+                    Text(account.phone, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.subtleText)),
                   ],
                   const SizedBox(height: 8),
                   Wrap(
@@ -540,7 +541,7 @@ class _ClientAccountCard extends StatelessWidget {
               ),
             ),
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert_rounded, color: AppColors.slate500),
+              icon: Icon(Icons.more_vert_rounded, color: Theme.of(context).colorScheme.subtleText),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               color: Theme.of(context).colorScheme.border,
               onSelected: (val) {
@@ -674,14 +675,15 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.slate900,
+      backgroundColor: cs.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: AppColors.slate850,
+        backgroundColor: cs.appBarBg,
         title: Text(_isEditing ? 'Edit Client' : 'New Client'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: AppColors.slate700),
+          child: Divider(height: 1, thickness: 1, color: cs.dividerC),
         ),
       ),
       body: Form(
@@ -721,7 +723,7 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
                 children: [
                   const Icon(Icons.toggle_on_outlined, color: AppColors.cyan500),
                   const SizedBox(width: 12),
-                  const Expanded(child: Text('Active', style: TextStyle(fontWeight: FontWeight.w500, color: AppColors.slate200))),
+                  const Expanded(child: Text('Active', style: TextStyle(fontWeight: FontWeight.w500))),
                   Switch(value: _isActive, onChanged: (v) => setState(() => _isActive = v)),
                 ],
               ),
@@ -782,7 +784,7 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(isEdit ? 'Edit Contact' : 'Add Contact',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.slate100)),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             _buildField(controller: nameCtrl, label: 'Name', icon: Icons.person_outline),
             const SizedBox(height: 10),
@@ -849,9 +851,9 @@ class _ContactTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(contact['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.slate100)),
+                Text(contact['name'] ?? '', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Theme.of(context).colorScheme.onSurface)),
                 if ((contact['role'] ?? '').isNotEmpty)
-                  Text(contact['role']!, style: const TextStyle(fontSize: 11, color: AppColors.slate500)),
+                  Text(contact['role']!, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.subtleText)),
               ],
             ),
           ),
@@ -883,16 +885,16 @@ class _EmptyState extends StatelessWidget {
           Container(
             width: 88, height: 88,
             decoration: BoxDecoration(
-              color: AppColors.slate800,
+              color: Theme.of(context).colorScheme.surfaceContainer,
               shape: BoxShape.circle,
               border: Border.all(color: Theme.of(context).colorScheme.border),
             ),
-            child: Icon(icon, size: 40, color: AppColors.slate500),
+            child: Icon(icon, size: 40, color: Theme.of(context).colorScheme.subtleText),
           ),
           const SizedBox(height: 20),
-          Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.slate200)),
+          Text(title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
           const SizedBox(height: 8),
-          Text(subtitle, style: const TextStyle(fontSize: 13, color: AppColors.slate400), textAlign: TextAlign.center),
+          Text(subtitle, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.subtleText), textAlign: TextAlign.center),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: 20),
             FilledButton.icon(onPressed: onAction, icon: const Icon(Icons.add_rounded), label: Text(actionLabel!)),
@@ -915,7 +917,7 @@ class _SectionTitle extends StatelessWidget {
       children: [
         Container(width: 3, height: 16, decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(2))),
         const SizedBox(width: 8),
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.cyan400)),
+        Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Theme.of(context).colorScheme.primary)),
       ],
     );
   }

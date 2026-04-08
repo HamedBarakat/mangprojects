@@ -16,14 +16,15 @@ class EmployeesScreen extends ConsumerWidget {
     final statusFilter = ref.watch(employeeFilterProvider);
     final deptFilter = ref.watch(employeeDepartmentFilterProvider);
 
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.slate900,
+      backgroundColor: cs.scaffoldBg,
       appBar: AppBar(
         title: const Text('Employees'),
-        backgroundColor: AppColors.slate850,
+        backgroundColor: cs.appBarBg,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: AppColors.slate700),
+          child: Divider(height: 1, thickness: 1, color: cs.dividerC),
         ),
         actions: [
           Container(
@@ -46,7 +47,7 @@ class EmployeesScreen extends ConsumerWidget {
         children: [
           // ── Filter Bar ─────────────────────────────────────────────────
           Container(
-            color: AppColors.slate850,
+            color: cs.appBarBg,
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
             child: Column(
               children: [
@@ -91,7 +92,7 @@ class EmployeesScreen extends ConsumerWidget {
             ),
           ),
 
-          Container(height: 1, color: AppColors.slate700),
+          Divider(height: 1, thickness: 1, color: cs.dividerC),
 
           // ── List ───────────────────────────────────────────────────────
           Expanded(
@@ -107,11 +108,11 @@ class EmployeesScreen extends ConsumerWidget {
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: AppColors.slate800,
+                            color: cs.surfaceContainer,
                             shape: BoxShape.circle,
-                            border: Border.all(color: Theme.of(context).colorScheme.border),
+                            border: Border.all(color: cs.border),
                           ),
-                          child: const Icon(Icons.people_outline_rounded, size: 44, color: AppColors.slate500),
+                          child: Icon(Icons.people_outline_rounded, size: 44, color: cs.subtleText),
                         ),
                         const SizedBox(height: 16),
                         Text('No employees found',
@@ -182,17 +183,17 @@ class _FilterChip extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
-            color: selected ? color.withOpacity(0.15) : AppColors.slate800,
+            color: selected ? color.withOpacity(0.15) : Theme.of(context).colorScheme.surfaceContainer,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: selected ? color.withOpacity(0.6) : AppColors.slate600,
+              color: selected ? color.withOpacity(0.6) : Theme.of(context).colorScheme.border,
               width: selected ? 1.5 : 1,
             ),
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? color : AppColors.slate400,
+              color: selected ? color : Theme.of(context).colorScheme.subtleText,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               fontSize: 12,
             ),

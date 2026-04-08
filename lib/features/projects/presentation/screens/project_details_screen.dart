@@ -15,6 +15,7 @@ import '../../data/models/task_model.dart';
 import '../controllers/project_providers.dart';
 import '../controllers/task_providers.dart';
 import '../../../home/presentation/controllers/home_providers.dart';
+import '../../../employees/data/models/employee_model.dart';
 import '../../../employees/presentation/controllers/employee_providers.dart';
 import 'add_edit_project_screen.dart';
 import '../../../office/presentation/controllers/office_settings_providers.dart';
@@ -430,6 +431,14 @@ class _TasksTab extends ConsumerWidget {
             );
           }
 
+          // Serial numbers: sort all tasks by createdAt → assign global 1-based numbers
+          final sortedForNumbering = [...tasks]
+            ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          final taskNumbers = <String, int>{
+            for (var i = 0; i < sortedForNumbering.length; i++)
+              sortedForNumbering[i].id: i + 1,
+          };
+
           final Map<String, List<TaskModel>> grouped = {};
           for (final task in tasks) {
             grouped.putIfAbsent(task.discipline, () => []).add(task);
@@ -489,6 +498,7 @@ class _TasksTab extends ConsumerWidget {
                         currentUser: currentUser,
                         project: project,
                         ref: ref,
+                        taskNumber: taskNumbers[task.id] ?? 0,
                       ),
                     ),
                   ],
@@ -628,12 +638,15 @@ class _TaskCard extends StatelessWidget {
   final ProjectModel project;
   final WidgetRef ref;
 
+  final int taskNumber;
+
   const _TaskCard({
     required this.task,
     required this.canAddTask,
     required this.currentUser,
     required this.project,
     required this.ref,
+    this.taskNumber = 0,
   });
 
   @override
@@ -654,6 +667,27 @@ class _TaskCard extends StatelessWidget {
           children: [
             Row(
               children: [
+                if (taskNumber > 0) ...[
+                  Container(
+                    width: taskNumber > 9 ? 34 : 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: cs.primaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$taskNumber',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: cs.onPrimaryContainer,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: Text(
                     task.title,
@@ -951,6 +985,50 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
         .where((e) => e.role.toLowerCase() == 'reviewer')
         .toList();
 
+    // ── Discipline-based filtering ─────────────────────────────────────────────
+    final isDisciplineSelected =
+        _selectedDiscipline != null && _selectedDiscipline!.isNotEmpty;
+
+    List<EmployeeModel> filteredEngineers;
+    bool engineerFallback = false;
+    if (isDisciplineSelected) {
+      final disc = _selectedDiscipline!.toLowerCase();
+      final fl = engineers.where((e) {
+        final isLeaderOrReviewer =
+            e.role == 'team_leader' || e.role == 'reviewer';
+        if (isLeaderOrReviewer) return true;
+        final dept = e.department.toLowerCase();
+        final spec = e.specialization.toLowerCase();
+        return dept == disc ||
+            spec.contains(disc) ||
+            (disc.contains(spec) && spec.isNotEmpty);
+      }).toList();
+      if (fl.isEmpty) {
+        filteredEngineers = engineers;
+        engineerFallback = true;
+      } else {
+        filteredEngineers = fl;
+      }
+    } else {
+      filteredEngineers = engineers;
+    }
+
+    final List<EmployeeModel> filteredReviewers;
+    if (isDisciplineSelected) {
+      final disc = _selectedDiscipline!.toLowerCase();
+      final fl = reviewers.where((e) {
+        if (e.uid == _selectedReviewer) return true; // keep current
+        final dept = e.department.toLowerCase();
+        final spec = e.specialization.toLowerCase();
+        return dept == disc ||
+            spec.contains(disc) ||
+            (disc.contains(spec) && spec.isNotEmpty);
+      }).toList();
+      filteredReviewers = fl.isEmpty ? reviewers : fl;
+    } else {
+      filteredReviewers = reviewers;
+    }
+
     // ── Auto-fill Discipline من department المستخدم (مرة واحدة فقط) ──────────
     if (!_isEdit &&
         !_disciplineInitialized &&
@@ -1058,10 +1136,17 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
                         label: 'Discipline *',
                         value: _selectedDiscipline,
                         items: disciplines,
-                        onChanged: (v) => setState(() {
-                          _selectedDiscipline = v;
-                          _errorMessage = null;
-                        }),
+                        onChanged: (v) {
+                          final prev = _selectedDiscipline;
+                          if (v != null && v.isNotEmpty && v != prev) {
+                            _clearEngineersNotMatchingDiscipline(
+                                v, employees);
+                          }
+                          setState(() {
+                            _selectedDiscipline = v;
+                            _errorMessage = null;
+                          });
+                        },
                       ),
                     ),
                   ],
@@ -1074,13 +1159,29 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
                     color: cs.onSurface.withOpacity(0.8),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
+                Text(
+                  isDisciplineSelected
+                      ? engineerFallback
+                          ? 'No engineers in ${_selectedDiscipline!} — showing all'
+                          : 'Showing engineers in: ${_selectedDiscipline!}'
+                      : 'Select a discipline first to filter engineers',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: engineerFallback
+                        ? Colors.orange
+                        : isDisciplineSelected
+                            ? cs.primary.withOpacity(0.7)
+                            : cs.onSurface.withOpacity(0.45),
+                  ),
+                ),
+                const SizedBox(height: 6),
                 GestureDetector(
                   onTap: () async {
                     await showDialog(
                       context: context,
                       builder: (_) => _EngineersPickerDialog(
-                        engineers: engineers,
+                        engineers: filteredEngineers,
                         selectedIds: Set.from(_selectedEngineerIds),
                         selectedNames: List.from(_selectedEngineerNames),
                         onChanged: (ids, names) {
@@ -1170,7 +1271,7 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
                       value: '',
                       child: Text('No Reviewer'),
                     ),
-                    ...reviewers.map(
+                    ...filteredReviewers.map(
                       (e) => DropdownMenuItem<String>(
                         value: e.uid,
                         child: Text(e.name),
@@ -1488,6 +1589,33 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
       if (mounted) {
         setState(() => _saving = false);
       }
+    }
+  }
+
+  /// Removes previously selected engineers that don't match the new discipline.
+  /// Team leaders and reviewers are always kept.
+  void _clearEngineersNotMatchingDiscipline(
+      String discipline, List<EmployeeModel> allEmployees) {
+    final disc = discipline.toLowerCase();
+    final toRemoveIds = <String>[];
+    for (final id in List<String>.from(_selectedEngineerIds)) {
+      final matches = allEmployees.where((e) => e.uid == id);
+      if (matches.isEmpty) continue;
+      final emp = matches.first;
+      final isLeaderOrReviewer =
+          emp.role == 'team_leader' || emp.role == 'reviewer';
+      if (isLeaderOrReviewer) continue;
+      final dept = emp.department.toLowerCase();
+      final spec = emp.specialization.toLowerCase();
+      final matches_ = dept == disc ||
+          spec.contains(disc) ||
+          (disc.contains(spec) && spec.isNotEmpty);
+      if (!matches_) toRemoveIds.add(id);
+    }
+    for (final id in toRemoveIds) {
+      final empList = allEmployees.where((e) => e.uid == id);
+      if (empList.isNotEmpty) _selectedEngineerNames.remove(empList.first.name);
+      _selectedEngineerIds.remove(id);
     }
   }
 
