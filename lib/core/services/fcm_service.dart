@@ -68,12 +68,14 @@ class FcmService {
 
   Future<void> _saveToken(String userId, String token) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('fcmTokens')
-          .doc(token)
-          .set({
+      final userRef = FirebaseFirestore.instance.collection('users').doc(userId);
+      // Save to top-level user doc so Cloud Functions can read it easily
+      await userRef.update({
+        'fcmToken': token,
+        'fcmUpdatedAt': FieldValue.serverTimestamp(),
+      });
+      // Also save to fcmTokens subcollection (supports multiple devices)
+      await userRef.collection('fcmTokens').doc(token).set({
         'token': token,
         'platform': kIsWeb ? 'web' : defaultTargetPlatform.name.toLowerCase(),
         'updatedAt': FieldValue.serverTimestamp(),

@@ -51,6 +51,12 @@ class _AttendanceScaffold extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
         title: const Text('Attendance'),
         bottom: canSeeTeam
             ? PreferredSize(

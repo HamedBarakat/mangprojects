@@ -24,6 +24,9 @@
       }
     }
   },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "firestore": {
     "database": "(default)",
     "location": "nam5",

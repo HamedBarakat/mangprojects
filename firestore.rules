@@ -61,6 +61,10 @@ service cloud.firestore {
       return isSignedIn() && currentUser().officeId == officeId;
     }
 
+    function getUserOfficeId() {
+      return currentUser().officeId;
+    }
+
     function isClientRole() {
       return isSignedIn() && currentUser().role == 'client';
     }
@@ -229,6 +233,62 @@ service cloud.firestore {
     // by regular employees.
     match /developers/{devId} {
       allow read, write: if isAdmin();
+    }
+
+    // ── Project Chats ─────────────────────────────────────────────────────────
+    match /chats/{chatId} {
+      // Only members, creator, or admins can read the chat document
+      allow read: if isSignedIn() && (
+          isAdmin() ||
+          request.auth.uid in resource.data.members ||
+          resource.data.createdBy == request.auth.uid
+      );
+
+      // Any same-office user can create a chat
+      allow create: if isSignedIn() &&
+          request.resource.data.officeId == getUserOfficeId();
+
+      // Admin or creator can update anything.
+      // Members can update only the lastSeen map (unread tracking).
+      allow update: if isSignedIn() && (
+          isAdmin() ||
+          resource.data.createdBy == request.auth.uid ||
+          (request.auth.uid in resource.data.members &&
+           request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['lastSeen']))
+      );
+
+      // Only admin or chat creator can delete
+      allow delete: if isSignedIn() && (
+          isAdmin() ||
+          resource.data.createdBy == request.auth.uid
+      );
+
+      match /messages/{messageId} {
+        // Only members, creator, or admins can read messages
+        allow read: if isSignedIn() && (
+            isAdmin() ||
+            request.auth.uid in
+                get(/databases/$(database)/documents/chats/$(chatId)).data.members ||
+            get(/databases/$(database)/documents/chats/$(chatId)).data.createdBy
+                == request.auth.uid
+        );
+        // Same restriction for creating (sending) messages
+        allow create: if isSignedIn() && (
+            isAdmin() ||
+            request.auth.uid in
+                get(/databases/$(database)/documents/chats/$(chatId)).data.members ||
+            get(/databases/$(database)/documents/chats/$(chatId)).data.createdBy
+                == request.auth.uid
+        );
+        // Only message sender, chat creator, or admin can update/delete
+        allow update, delete: if isSignedIn() && (
+            isAdmin() ||
+            resource.data.senderId == request.auth.uid ||
+            get(/databases/$(database)/documents/chats/$(chatId)).data.createdBy
+                == request.auth.uid
+        );
+      }
     }
   }
 }

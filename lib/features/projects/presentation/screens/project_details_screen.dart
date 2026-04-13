@@ -27,6 +27,8 @@ import '../../../reports/presentation/screens/report_export_stub.dart'
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../notifications/presentation/controllers/notification_providers.dart';
 import '../../../../core/widgets/employee_picker_dropdown.dart';
+import '../../../chat/presentation/screens/chat_screen.dart';
+import '../../../chat/presentation/controllers/chat_providers.dart';
 
 class ProjectDetailsScreen extends ConsumerStatefulWidget {
   final ProjectModel project;
@@ -44,7 +46,7 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -244,16 +246,76 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen>
                     indicatorColor: Colors.white,
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white.withOpacity(0.6),
-                    tabs: const [
-                      Tab(text: 'Overview'),
-                      Tab(text: 'Tasks'),
-                      Tab(
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    tabs: [
+                      const Tab(text: 'Overview'),
+                      const Tab(text: 'Tasks'),
+                      const Tab(
                         icon: Icon(Icons.comment_outlined, size: 16),
                         text: 'My Notes',
                       ),
-                      Tab(
+                      const Tab(
                         icon: Icon(Icons.bar_chart_rounded, size: 16),
                         text: 'Report',
+                      ),
+                      // ── Chat tab with unread badge ─────────────────────────
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final currentUser =
+                              ref.watch(currentUserProvider).value;
+                          final chatAsync = ref
+                              .watch(chatForProjectProvider(project.id));
+                          final chat = chatAsync.valueOrNull;
+                          int unread = 0;
+                          if (chat != null && currentUser != null) {
+                            final msgs = ref
+                                .watch(chatMessagesProvider(chat.id))
+                                .valueOrNull ?? [];
+                            final lastSeen =
+                                chat.lastSeenFor(currentUser.uid);
+                            unread = msgs
+                                .where((m) =>
+                                    !m.isDeleted &&
+                                    m.senderId != currentUser.uid &&
+                                    (lastSeen == null ||
+                                        m.timestamp.isAfter(lastSeen)))
+                                .length;
+                          }
+                          return Tab(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.chat_outlined, size: 16),
+                                const SizedBox(width: 4),
+                                const Text('Chat'),
+                                if (unread > 0) ...[
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.all(3),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.orange,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 16,
+                                      minHeight: 16,
+                                    ),
+                                    child: Text(
+                                      unread > 99 ? '99+' : '$unread',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -273,6 +335,11 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen>
                 ),
                 _NotesTab(projectId: project.id),
                 _ReportTab(projectId: project.id, projectName: project.name),
+                ChatScreen(
+                  projectId: project.id,
+                  projectName: project.name,
+                  officeId: project.officeId,
+                ),
               ],
             ),
           ),

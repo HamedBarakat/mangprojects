@@ -31,6 +31,7 @@ import '../../../leaves/presentation/screens/leaves_screen.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/theme_provider.dart';
 import '../../../../core/services/fcm_service.dart';
+import '../widgets/dashboard_sections.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -625,6 +626,49 @@ class _DashboardTab extends ConsumerWidget {
                 ),
               ),
             ),
+
+          // ── Attendance ───────────────────────────────────────────────────
+          const SizedBox(height: 24),
+          const DashSectionHeader(title: 'Attendance'),
+          const SizedBox(height: 12),
+          AttendanceDashCard(user: user),
+
+          // ── Leaves ───────────────────────────────────────────────────────
+          const SizedBox(height: 24),
+          const DashSectionHeader(title: 'Leave'),
+          const SizedBox(height: 12),
+          LeavesDashSection(user: user),
+          ApprovalsDashCard(user: user),
+
+          // ── My Tasks ─────────────────────────────────────────────────────
+          if (user.canSeeTasks) ...[
+            const SizedBox(height: 24),
+            const DashSectionHeader(title: 'My Tasks'),
+            const SizedBox(height: 12),
+            MyTasksDashSection(user: user),
+          ],
+
+          // ── Recent Notifications ─────────────────────────────────────────
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const DashSectionHeader(title: 'Recent Notifications'),
+              TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const NotificationsScreen()),
+                ),
+                child: Text('View all',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontSize: 12)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          RecentNotificationsDashSection(user: user),
         ],
       ),
     );

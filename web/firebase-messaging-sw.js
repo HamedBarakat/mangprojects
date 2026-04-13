@@ -1,5 +1,5 @@
-importScripts('https://www.gstatic.com/firebasejs/10.0.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.0.0/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js');
 
 firebase.initializeApp({
   apiKey: 'AIzaSyCT_DzOXrc13yux8rV_p0kfcjEdlFogPsw',
@@ -12,14 +12,14 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Handle background/terminated-tab notifications
+// Handle background / terminated-tab push notifications
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title ?? 'Mang Projects';
-  const options = {
+  const notificationTitle = payload.notification?.title ?? 'MangProjects';
+  const notificationOptions = {
     body: payload.notification?.body ?? '',
     icon: '/icons/Icon-192.png',
     badge: '/icons/Icon-192.png',
     data: payload.data ?? {},
   };
-  return self.registration.showNotification(title, options);
+  return self.registration.showNotification(notificationTitle, notificationOptions);
 });
