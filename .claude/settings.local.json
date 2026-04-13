@@ -11,7 +11,13 @@
       "Bash(grep \"lib/features/leaves\\\\|lib\\\\\\\\features\\\\\\\\leaves\")",
       "Bash(flutter build:*)",
       "Bash(firebase deploy:*)",
-      "Bash(start /B flutter run -d chrome --web-port=8080)"
+      "Bash(start /B flutter run -d chrome --web-port=8080)",
+      "WebFetch(domain:mangprojects.web.app)",
+      "Bash(xargs grep:*)",
+      "Bash(mkdir -p \"C:\\\\DD\\\\Android Apps\\\\mang_projects - Rev16\\\\functions\")",
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "Bash(flutter pub:*)"
     ]
   }
 }

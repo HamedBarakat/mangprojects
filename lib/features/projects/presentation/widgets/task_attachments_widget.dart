@@ -197,7 +197,7 @@ class _TaskAttachmentsWidgetState extends ConsumerState<TaskAttachmentsWidget> {
                               onTap: widget.isReadOnly
                                   ? null
                                   : () async {
-                                      await _deleteAttachment(image.id);
+                                      await _deleteAttachment(image);
                                     },
                               child: Container(
                                 padding: const EdgeInsets.all(4),
@@ -236,7 +236,7 @@ class _TaskAttachmentsWidgetState extends ConsumerState<TaskAttachmentsWidget> {
                       onPressed: widget.isReadOnly
                           ? null
                           : () async {
-                              await _deleteAttachment(a.id);
+                              await _deleteAttachment(a);
                             },
                     ),
                   ),
@@ -249,9 +249,20 @@ class _TaskAttachmentsWidgetState extends ConsumerState<TaskAttachmentsWidget> {
     );
   }
 
-  Future<void> _deleteAttachment(String attachmentId) async {
-    await ref
-        .read(taskRepositoryProvider)
-        .deleteAttachment(taskId: widget.taskId, attachmentId: attachmentId);
+  Future<void> _deleteAttachment(TaskAttachment attachment) async {
+    try {
+      await ref
+          .read(deleteTaskAttachmentControllerProvider)
+          .submit(
+            officeId: widget.officeId,
+            projectId: widget.projectId,
+            taskId: widget.taskId,
+            attachmentId: attachment.id,
+            storagePath: attachment.storagePath,
+          );
+    } catch (e) {
+      _log('❌ deleteAttachment failed: $e');
+      // Non-blocking — UI reflects Firestore state via stream
+    }
   }
 }

@@ -181,6 +181,7 @@ class SettingsScreen extends ConsumerWidget {
                   ref.invalidate(teamLeaderReviewTasksProvider);
                   ref.invalidate(qcReviewTasksProvider);
                   ref.invalidate(unreadNotificationsCountProvider);
+                  ref.invalidate(myNotificationsProvider);
                   ref.invalidate(employeesProvider);
                   // Clear local storage and office
                   await ref.read(localStorageProvider).clearAll();

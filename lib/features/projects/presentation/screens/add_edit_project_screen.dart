@@ -8,6 +8,7 @@ import '../../../../features/home/presentation/controllers/home_providers.dart';
 import '../../../../features/office/presentation/controllers/office_settings_providers.dart';
 import '../../../../features/client/data/providers/client_providers.dart';
 import '../../../../features/employees/presentation/controllers/employee_providers.dart';
+import '../../../../core/widgets/employee_picker_dropdown.dart';
 
 class AddEditProjectScreen extends ConsumerStatefulWidget {
   final ProjectModel? project;
@@ -895,113 +896,69 @@ class _ProjectTeamDropdowns extends ConsumerWidget {
         final active = employees.where((e) => e.isActive).toList()
           ..sort((a, b) => a.name.compareTo(b.name));
 
-        // Team Leaders = admin + team_leader
         final teamLeaders = active
             .where((e) => e.isTeamLeader || e.isAdmin)
             .toList();
-
-        // QC = reviewer
         final reviewers = active.where((e) => e.isReviewer).toList();
-
-        // PM = everyone active (المدير ممكن يكون أي موظف)
         final allStaff = active.where((e) => !e.isClient).toList();
-
-        InputDecoration dec(String label, IconData icon) => InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, color: cs.primary),
-          filled: true,
-          fillColor: cs.surfaceContainerHighest,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: cs.primary, width: 2),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
-        );
-
-        final noneItem = <DropdownMenuItem<String>>[
-          const DropdownMenuItem(value: '', child: Text('— Not Assigned —')),
-        ];
 
         return Column(
           children: [
             // ── Team Leader ───────────────────────────────────────────
-            DropdownButtonFormField<String>(
-              initialValue:
-                  teamLeaders.any((e) => e.uid == selectedTeamLeaderId)
-                  ? selectedTeamLeaderId
-                  : '',
-              decoration: dec('Team Leader', Icons.manage_accounts_outlined),
-              borderRadius: BorderRadius.circular(14),
-              hint: const Text('Select Team Leader'),
-              items: [
-                ...noneItem,
-                ...teamLeaders.map(
-                  (e) => DropdownMenuItem(value: e.uid, child: Text(e.name)),
-                ),
-              ],
-              onChanged: (id) {
-                if (id == null || id.isEmpty) {
+            EmployeePickerDropdown(
+              label: 'Team Leader',
+              prefixIcon: Icons.manage_accounts_outlined,
+              employees: teamLeaders,
+              selectedIds: selectedTeamLeaderId != null &&
+                      teamLeaders.any((e) => e.uid == selectedTeamLeaderId)
+                  ? [selectedTeamLeaderId!]
+                  : [],
+              multiSelect: false,
+              onChanged: (ids, names) {
+                if (ids.isEmpty) {
                   onTeamLeaderChanged(null, null);
                 } else {
-                  final emp = teamLeaders.firstWhere((e) => e.uid == id);
-                  onTeamLeaderChanged(id, emp.name);
+                  onTeamLeaderChanged(ids.first, names.first);
                 }
               },
             ),
             const SizedBox(height: 12),
 
             // ── QC Reviewer ───────────────────────────────────────────
-            DropdownButtonFormField<String>(
-              initialValue: reviewers.any((e) => e.uid == selectedQcId)
-                  ? selectedQcId
-                  : '',
-              decoration: dec('QC Reviewer', Icons.verified_outlined),
-              borderRadius: BorderRadius.circular(14),
-              hint: const Text('Select QC Reviewer'),
-              items: [
-                ...noneItem,
-                ...reviewers.map(
-                  (e) => DropdownMenuItem(value: e.uid, child: Text(e.name)),
-                ),
-              ],
-              onChanged: (id) {
-                if (id == null || id.isEmpty) {
+            EmployeePickerDropdown(
+              label: 'QC Reviewer',
+              prefixIcon: Icons.verified_outlined,
+              employees: reviewers,
+              selectedIds: selectedQcId != null &&
+                      reviewers.any((e) => e.uid == selectedQcId)
+                  ? [selectedQcId!]
+                  : [],
+              multiSelect: false,
+              onChanged: (ids, names) {
+                if (ids.isEmpty) {
                   onQcChanged(null, null);
                 } else {
-                  final emp = reviewers.firstWhere((e) => e.uid == id);
-                  onQcChanged(id, emp.name);
+                  onQcChanged(ids.first, names.first);
                 }
               },
             ),
             const SizedBox(height: 12),
 
             // ── PM ────────────────────────────────────────────────────
-            DropdownButtonFormField<String>(
-              initialValue: allStaff.any((e) => e.uid == selectedPmId)
-                  ? selectedPmId
-                  : '',
-              decoration: dec('Project Manager (PM)', Icons.badge_outlined),
-              borderRadius: BorderRadius.circular(14),
-              hint: const Text('Select Project Manager'),
-              items: [
-                ...noneItem,
-                ...allStaff.map(
-                  (e) => DropdownMenuItem(value: e.uid, child: Text(e.name)),
-                ),
-              ],
-              onChanged: (id) {
-                if (id == null || id.isEmpty) {
+            EmployeePickerDropdown(
+              label: 'Project Manager (PM)',
+              prefixIcon: Icons.badge_outlined,
+              employees: allStaff,
+              selectedIds: selectedPmId != null &&
+                      allStaff.any((e) => e.uid == selectedPmId)
+                  ? [selectedPmId!]
+                  : [],
+              multiSelect: false,
+              onChanged: (ids, names) {
+                if (ids.isEmpty) {
                   onPmChanged(null, null);
                 } else {
-                  final emp = allStaff.firstWhere((e) => e.uid == id);
-                  onPmChanged(id, emp.name);
+                  onPmChanged(ids.first, names.first);
                 }
               },
             ),

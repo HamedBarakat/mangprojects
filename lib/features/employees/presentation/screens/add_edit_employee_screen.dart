@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -207,6 +208,26 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
     _emergencyContactController.dispose();
     _nationalIdController.dispose();
     super.dispose();
+  }
+
+  Future<void> _sendPasswordReset() async {
+    final email = widget.employee?.email ?? '';
+    if (email.isEmpty) return;
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Password reset email sent to $email')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to send reset email: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
   }
 
   Future<void> _save() async {
@@ -448,6 +469,8 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
                 officeId: ref.read(currentUserProvider).value?.officeId ?? '',
                 excludeUid: widget.employee?.uid,
                 selectedUserId: _reportToUserId,
+                currentDepartment: _department,
+                currentJobTitleKey: _jobTitleKey,
                 onChanged: (uid, name, jobTitle) => setState(() {
                   _reportToUserId = uid;
                   _reportToName = name;
@@ -596,6 +619,29 @@ class _AddEditEmployeeScreenState extends ConsumerState<AddEditEmployeeScreen> {
                     setState(() => _contractEndDate = v),
               ),
               const SizedBox(height: 32),
+            ],
+
+            // ── Reset Password (Admin only, edit mode only) ──────────────
+            if (_isEditing &&
+                (ref.read(currentUserProvider).value?.isAdmin ?? false)) ...[
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.lock_reset_outlined),
+                  label: Text(
+                    'Send Password Reset Email',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  onPressed: _isLoading ? null : _sendPasswordReset,
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
             ],
 
             SizedBox(
@@ -1211,11 +1257,15 @@ class _ReportsToDropdown extends ConsumerStatefulWidget {
   final String officeId;
   final String? excludeUid;
   final String? selectedUserId;
+  final String currentDepartment;
+  final String currentJobTitleKey;
   final void Function(String? uid, String? name, String? jobTitle) onChanged;
 
   const _ReportsToDropdown({
     required this.officeId,
     required this.onChanged,
+    required this.currentDepartment,
+    required this.currentJobTitleKey,
     this.excludeUid,
     this.selectedUserId,
   });
@@ -1227,6 +1277,32 @@ class _ReportsToDropdown extends ConsumerStatefulWidget {
 class _ReportsToDropdownState extends ConsumerState<_ReportsToDropdown> {
   List<Map<String, String>> _employees = [];
   bool _loaded = false;
+
+  // Seniority rank by job-title key. Unknown keys default to 3.
+  static int _rankOf(String key) {
+    const ranks = {
+      'principal_managing_partner': 7,
+      'coo': 6,
+      'technical_office_manager': 6,
+      'head_of_department': 5,
+      'project_manager': 5,
+      'planning_scheduling_manager': 5,
+      'senior_design_engineer': 4,
+      'bim_manager': 4,
+      'design_engineer': 3,
+      'site_engineer': 3,
+      'bim_coordinator': 3,
+      'quantity_surveyor': 3,
+      'qc_engineer': 3,
+      'business_dev_engineer': 3,
+      'junior_engineer': 2,
+      'document_controll': 2,
+      'site_supervisor': 2,
+      'cad_bim_modeler': 2,
+      'chief_draftsman': 2,
+    };
+    return ranks[key] ?? 3;
+  }
 
   @override
   void initState() {
@@ -1242,18 +1318,39 @@ class _ReportsToDropdownState extends ConsumerState<_ReportsToDropdown> {
         .get();
     if (!mounted) return;
     final list = snap.docs
-        .where((d) => d.id != widget.excludeUid)
+        .where((d) =>
+            d.id != widget.excludeUid && d.data()['role'] != 'client')
         .map((d) => {
               'uid': d.id,
               'name': (d.data()['name'] as String? ?? ''),
               'jobTitle': (d.data()['jobTitle'] as String? ?? ''),
+              'department': (d.data()['department'] as String? ?? ''),
             })
-        .toList()
-      ..sort((a, b) => a['name']!.compareTo(b['name']!));
+        .toList();
     setState(() {
       _employees = list;
       _loaded = true;
     });
+  }
+
+  void _openPicker(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _ReportsToPickerSheet(
+        employees: _employees,
+        selectedUserId: widget.selectedUserId,
+        currentDepartment: widget.currentDepartment,
+        currentRank: _rankOf(widget.currentJobTitleKey),
+        rankOf: _rankOf,
+        onSelect: (uid, name, jobTitle) {
+          widget.onChanged(uid, name, jobTitle);
+        },
+      ),
+    );
   }
 
   @override
@@ -1278,74 +1375,308 @@ class _ReportsToDropdownState extends ConsumerState<_ReportsToDropdown> {
       );
     }
 
-    // Safe value check
-    final validUid = _employees.any((e) => e['uid'] == widget.selectedUserId)
-        ? widget.selectedUserId
-        : null;
+    final String displayText;
+    if (widget.selectedUserId == null) {
+      displayText = '— None (Top Level)';
+    } else {
+      final emp = _employees.firstWhere(
+        (e) => e['uid'] == widget.selectedUserId,
+        orElse: () => {},
+      );
+      displayText = emp.isEmpty
+          ? '— None (Top Level)'
+          : '${emp['name']} — ${JobTitles.labelOf(emp['jobTitle'] ?? '')}';
+    }
 
-    return DropdownButtonFormField<String>(
-      initialValue: validUid,
-      isExpanded: true,
-      onChanged: (uid) {
-        if (uid == null || uid == '__none__') {
-          widget.onChanged(null, null, null);
-        } else {
-          final emp = _employees.firstWhere((e) => e['uid'] == uid,
-              orElse: () => {});
-          widget.onChanged(emp['uid'], emp['name'], emp['jobTitle']);
-        }
-      },
-      decoration: InputDecoration(
-        labelText: 'Reports To (Direct Manager)',
-        prefixIcon: Icon(Icons.supervisor_account_outlined, color: cs.primary),
-        filled: true,
-        fillColor: cs.surfaceContainerHighest,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: cs.primary, width: 2),
-        ),
-      ),
+    return InkWell(
+      onTap: () => _openPicker(context),
       borderRadius: BorderRadius.circular(14),
-      items: [
-        const DropdownMenuItem<String>(
-          value: '__none__',
-          child: Text('— None (Top Level)'),
-        ),
-        ..._employees.map(
-          (e) => DropdownMenuItem<String>(
-            value: e['uid'],
-            child: Text(
-              '${e['name']} — ${JobTitles.labelOf(e['jobTitle'] ?? '')}',
-              overflow: TextOverflow.ellipsis,
-            ),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Reports To (Direct Manager)',
+          prefixIcon: Icon(Icons.supervisor_account_outlined, color: cs.primary),
+          suffixIcon: const Icon(Icons.arrow_drop_down),
+          filled: true,
+          fillColor: cs.surfaceContainerHighest,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: cs.primary, width: 2),
           ),
         ),
-      ],
-      selectedItemBuilder: (context) {
-        final all = ['__none__', ..._employees.map((e) => e['uid']!)];
-        return all.map((uid) {
-          if (uid == '__none__') {
-            return const Align(
-              alignment: Alignment.centerLeft,
-              child: Text('— None (Top Level)', style: TextStyle(fontSize: 13)),
-            );
-          }
-          final emp = _employees.firstWhere((e) => e['uid'] == uid,
-              orElse: () => {'name': '', 'jobTitle': ''});
-          return Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              '${emp['name']} — ${JobTitles.labelOf(emp['jobTitle'] ?? '')}',
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13),
+        child: Text(
+          displayText,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 13),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Reports To picker sheet ───────────────────────────────────────────────────
+class _ReportsToPickerSheet extends StatefulWidget {
+  final List<Map<String, String>> employees;
+  final String? selectedUserId;
+  final String currentDepartment;
+  final int currentRank;
+  final int Function(String key) rankOf;
+  final void Function(String? uid, String? name, String? jobTitle) onSelect;
+
+  const _ReportsToPickerSheet({
+    required this.employees,
+    required this.selectedUserId,
+    required this.currentDepartment,
+    required this.currentRank,
+    required this.rankOf,
+    required this.onSelect,
+  });
+
+  @override
+  State<_ReportsToPickerSheet> createState() => _ReportsToPickerSheetState();
+}
+
+class _ReportsToPickerSheetState extends State<_ReportsToPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    // Group A: same department, rank >= current employee's rank
+    final sameDept = widget.employees
+        .where((e) =>
+            e['department'] == widget.currentDepartment &&
+            widget.rankOf(e['jobTitle'] ?? '') >= widget.currentRank)
+        .toList()
+      ..sort((a, b) {
+        final diff = widget.rankOf(b['jobTitle'] ?? '') -
+            widget.rankOf(a['jobTitle'] ?? '');
+        return diff != 0 ? diff : a['name']!.compareTo(b['name']!);
+      });
+
+    // Group B: other departments, any rank
+    final otherDept = widget.employees
+        .where((e) => e['department'] != widget.currentDepartment)
+        .toList()
+      ..sort((a, b) {
+        final diff = widget.rankOf(b['jobTitle'] ?? '') -
+            widget.rankOf(a['jobTitle'] ?? '');
+        return diff != 0 ? diff : a['name']!.compareTo(b['name']!);
+      });
+
+    bool matches(Map<String, String> e) =>
+        _query.isEmpty ||
+        (e['name'] ?? '').toLowerCase().contains(_query.toLowerCase());
+
+    final filteredSame = sameDept.where(matches).toList();
+    final filteredOther = otherDept.where(matches).toList();
+
+    // Always keep the currently selected manager visible even if filtered out
+    final sel = widget.selectedUserId;
+    if (sel != null &&
+        filteredSame.every((e) => e['uid'] != sel) &&
+        filteredOther.every((e) => e['uid'] != sel)) {
+      final emp = widget.employees.firstWhere(
+        (e) => e['uid'] == sel,
+        orElse: () => {},
+      );
+      if (emp.isNotEmpty) {
+        if (emp['department'] == widget.currentDepartment &&
+            widget.rankOf(emp['jobTitle'] ?? '') >= widget.currentRank) {
+          filteredSame.add(emp);
+        } else {
+          filteredOther.add(emp);
+        }
+      }
+    }
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollCtrl) => Column(
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(top: 12, bottom: 8),
+            decoration: BoxDecoration(
+              color: cs.onSurface.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(2),
             ),
-          );
-        }).toList();
-      },
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Text(
+              'Reports To (Direct Manager)',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: cs.onSurface,
+              ),
+            ),
+          ),
+          // Search bar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: TextField(
+              controller: _searchCtrl,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Search by name…',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: cs.surfaceContainerHighest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+              ),
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView(
+              controller: scrollCtrl,
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                // None option
+                ListTile(
+                  leading: Icon(Icons.block_outlined,
+                      color: cs.onSurface.withOpacity(0.5)),
+                  title: const Text('— None (Top Level)'),
+                  selected: widget.selectedUserId == null,
+                  onTap: () {
+                    widget.onSelect(null, null, null);
+                    Navigator.of(context).pop();
+                  },
+                ),
+                const Divider(height: 1),
+
+                // Group A — Same Department
+                if (filteredSame.isNotEmpty) ...[
+                  _GroupHeader(label: 'Same Department', colorScheme: cs),
+                  ...filteredSame.map((e) => _EmployeeTile(
+                        emp: e,
+                        isSelected: e['uid'] == widget.selectedUserId,
+                        onTap: () {
+                          widget.onSelect(e['uid'], e['name'], e['jobTitle']);
+                          Navigator.of(context).pop();
+                        },
+                      )),
+                ],
+
+                // Group B — Other Departments
+                if (filteredOther.isNotEmpty) ...[
+                  _GroupHeader(label: 'Other Departments', colorScheme: cs),
+                  ...filteredOther.map((e) => _EmployeeTile(
+                        emp: e,
+                        isSelected: e['uid'] == widget.selectedUserId,
+                        onTap: () {
+                          widget.onSelect(e['uid'], e['name'], e['jobTitle']);
+                          Navigator.of(context).pop();
+                        },
+                      )),
+                ],
+
+                if (filteredSame.isEmpty && filteredOther.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Center(
+                      child: Text(
+                        'No employees match "$_query"',
+                        style: TextStyle(
+                            color: cs.onSurface.withOpacity(0.5)),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupHeader extends StatelessWidget {
+  final String label;
+  final ColorScheme colorScheme;
+
+  const _GroupHeader({required this.label, required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      color: colorScheme.surfaceContainerHighest,
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: colorScheme.onSurface.withOpacity(0.5),
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+}
+
+class _EmployeeTile extends StatelessWidget {
+  final Map<String, String> emp;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _EmployeeTile({
+    required this.emp,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final initial =
+        (emp['name']?.isNotEmpty == true) ? emp['name']![0].toUpperCase() : '?';
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: isSelected ? cs.primary : cs.surfaceContainerHighest,
+        foregroundColor: isSelected ? cs.onPrimary : cs.onSurface,
+        child: Text(initial,
+            style: const TextStyle(fontWeight: FontWeight.bold)),
+      ),
+      title: Text(
+        emp['name'] ?? '',
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected ? cs.primary : cs.onSurface,
+        ),
+      ),
+      subtitle: Text(
+        JobTitles.labelOf(emp['jobTitle'] ?? ''),
+        style:
+            TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.6)),
+      ),
+      trailing:
+          isSelected ? Icon(Icons.check_circle, color: cs.primary) : null,
+      onTap: onTap,
     );
   }
 }

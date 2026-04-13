@@ -19,6 +19,7 @@ class ProjectsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider).value;
     final isAdmin = user?.isAdmin ?? false;
+    final isAdminOrReviewer = isAdmin || (user?.isReviewer ?? false);
     final isTeamLeader = user?.isTeamLeader ?? false;
 
     final cs = Theme.of(context).colorScheme;
@@ -28,7 +29,7 @@ class ProjectsScreen extends ConsumerWidget {
         backgroundColor: cs.appBarBg,
         title: const Text('Projects'),
         actions: [
-          if (isAdmin)
+          if (isAdminOrReviewer)
             Container(
               margin: const EdgeInsets.only(right: 12),
               child: IconButton(
@@ -50,7 +51,7 @@ class ProjectsScreen extends ConsumerWidget {
       body: isTeamLeader
           ? const _TeamLeaderProjectsView()
           : const _ProjectsList(showOnlyMine: false),
-      floatingActionButton: isAdmin
+      floatingActionButton: isAdminOrReviewer
           ? FloatingActionButton.extended(
               onPressed: () => Navigator.push(
                 context,

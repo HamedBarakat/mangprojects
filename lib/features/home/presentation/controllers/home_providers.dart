@@ -17,13 +17,13 @@ final currentUserProvider = StreamProvider<UserModel?>((ref) async* {
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
     await for (final firebaseUser in FirebaseAuth.instance.authStateChanges()) {
       final uid = firebaseUser?.uid ?? AuthRepository.androidUid;
-      debugPrint('[currentUserProvider] android auth uid=$uid');
+      if (kDebugMode) debugPrint('[currentUserProvider] android auth uid=$uid');
       if (uid == null) {
         yield null;
         continue;
       }
       final user = await repo.getUser(uid);
-      debugPrint('[currentUserProvider] android loaded user=${user?.uid} role=${user?.role}');
+      if (kDebugMode) debugPrint('[currentUserProvider] android loaded user=${user?.uid} role=${user?.role}');
       yield user;
     }
     return;
@@ -31,13 +31,13 @@ final currentUserProvider = StreamProvider<UserModel?>((ref) async* {
 
   await for (final firebaseUser in FirebaseAuth.instance.authStateChanges()) {
     final uid = firebaseUser?.uid;
-    debugPrint('[currentUserProvider] web auth uid=$uid');
+    if (kDebugMode) debugPrint('[currentUserProvider] web auth uid=$uid');
     if (uid == null) {
       yield null;
       continue;
     }
     final user = await repo.getUser(uid);
-    debugPrint('[currentUserProvider] web loaded user=${user?.uid} role=${user?.role}');
+    if (kDebugMode) debugPrint('[currentUserProvider] web loaded user=${user?.uid} role=${user?.role}');
     yield user;
   }
 });

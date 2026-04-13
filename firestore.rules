@@ -66,6 +66,11 @@ service cloud.firestore {
     }
 
     // ── Offices ─────────────────────────────────────────────────────────────
+    // The root office document holds only public fields (code, name, isActive,
+    // logo) and is readable without authentication so the office-code entry
+    // screen can validate a code before the user signs in.
+    // Sensitive configuration lives exclusively in the settings subcollection,
+    // which remains restricted to signed-in users.
     match /offices/{officeId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -101,19 +106,19 @@ service cloud.firestore {
       );
       allow create: if isAdminOrReviewer();
 
-      // Team Leader + Engineer مسموح لهم update المشروع
-      // لأن إضافة/تعديل Task يستدعي _recalculateProjectCompletion
+      // Admin/Reviewer/TL/DC can update freely within their office.
+      // Engineers are restricted to only updating the completionPercentage field
+      // (the only field _recalculateProjectCompletion writes), preventing them
+      // from modifying project metadata.
       allow update: if isAdminOrReviewer()
         || (isDC() && belongsToOffice(resource.data.officeId))
         || (isTeamLeader() && belongsToOffice(resource.data.officeId))
-        || (isEngineer() && belongsToOffice(resource.data.officeId));
+        || (isEngineer() && belongsToOffice(resource.data.officeId)
+            && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['completionPercentage', 'updatedAt']));
 
       allow delete: if isAdmin();
 
-      // ✅ FIX: projects/{projectId}/tasks subcollection
-      // Used by _recalculateProjectCompletion to read tasks per project.
-      // Any signed-in user in the same office can read; write follows same
-      // rules as the root tasks collection.
       match /tasks/{taskId} {
         allow read: if isSignedIn();
         allow write: if isSignedIn() && isTeamLeaderOrAbove();
@@ -122,15 +127,16 @@ service cloud.firestore {
 
     // ── Tasks (root collection) ───────────────────────────────────────────────
     match /tasks/{taskId} {
-      // Any signed-in user can read — filtering is done in code via officeId
-      allow read: if isSignedIn();
+      // FIX: scope reads to the user's own office — prevents cross-office data leaks.
+      // Client role checks their linkedClientId in code; Firestore allows the read
+      // because clientRole users still belong to the same office via officeId.
+      allow read: if isSignedIn() && (
+        belongsToOffice(resource.data.officeId) ||
+        isClientRole()
+      );
 
-      // Admin + Reviewer + Team Leader + Management can create tasks
       allow create: if isSignedIn() && isTeamLeaderOrAbove();
 
-      // Any employee in the same office can update (for status & progress changes)
-      // Client can also update their tasks (approve/reject in client_review)
-      // NOTE: isClientRole() check uses linkedClientId to match task's clientId
       allow update: if isSignedIn() && (
         belongsToOffice(resource.data.officeId) ||
         isDC() ||
@@ -143,19 +149,16 @@ service cloud.firestore {
         allow read, write: if isSignedIn();
       }
       match /attachments/{attachmentId} {
-        // Any signed-in user can read attachments (engineers, TL, QC, DC, Client, Admin)
         allow read: if isSignedIn();
-        // Write: office members + client (to upload submittal feedback docs)
-        // All signed-in users can write attachments
-        // (Engineers upload work, Clients upload feedback, DC uploads submittals)
         allow write: if isSignedIn();
       }
     }
 
     // ── Task Activities ───────────────────────────────────────────────────────
     match /task_activities/{activityId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn(); // Client, DC, Engineer etc. can log activities
+      // FIX: scope reads to the user's own office — prevents cross-office audit log leaks.
+      allow read: if isSignedIn() && belongsToOffice(resource.data.officeId);
+      allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
@@ -178,7 +181,6 @@ service cloud.firestore {
 
     // ── Attendance ───────────────────────────────────────────────────────────
     match /attendance/{docId} {
-      // Fast-path: own record (no currentUser() lookup needed for streams)
       allow read: if isSignedIn() && (
         resource.data.employeeId == request.auth.uid ||
         belongsToOffice(resource.data.officeId) ||
@@ -204,17 +206,14 @@ service cloud.firestore {
 
     // ── Leave Requests ───────────────────────────────────────────────────────
     match /leave_requests/{docId} {
-      // Employee can read their own requests; admin/management can read all in office
       allow read: if isSignedIn() && (
         resource.data.employeeId == request.auth.uid ||
         (isAdmin() && belongsToOffice(resource.data.officeId)) ||
         (isManagement() && belongsToOffice(resource.data.officeId)) ||
         isSectionHeadOrAbove()
       );
-      // Any signed-in employee can submit a leave request
       allow create: if isSignedIn() &&
         request.resource.data.employeeId == request.auth.uid;
-      // Approvers (admin/management/section head) can update; employee can cancel own
       allow update: if isSignedIn() && (
         isAdmin() ||
         isManagement() ||
@@ -226,8 +225,10 @@ service cloud.firestore {
     }
 
     // ── Developers ───────────────────────────────────────────────────────────
+    // FIX: restrict to admin only — developer panel data must not be accessible
+    // by regular employees.
     match /developers/{devId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isAdmin();
     }
   }
 }

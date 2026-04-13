@@ -100,6 +100,15 @@ class UserModel {
       jobTitle == 'principal_managing_partner' ||
       jobTitle == 'technical_office_manager';
 
+  /// Who can see the Clients report tab.
+  /// Includes Reviewers because they can create/edit clients.
+  bool get canSeeClientReports =>
+      isAdmin || isManagement || isReviewer ||
+      jobTitle == 'head_of_department' ||
+      jobTitle == 'coo' ||
+      jobTitle == 'principal_managing_partner' ||
+      jobTitle == 'technical_office_manager';
+
   /// Senior management for dashboard
   bool get isSeniorManagement =>
       isAdmin || isManagement ||

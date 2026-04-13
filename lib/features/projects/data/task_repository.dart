@@ -72,9 +72,13 @@ class TaskRepository {
     );
   }
 
-  Future<void> _recalculateProjectCompletion(String projectId) async {
+  Future<void> _recalculateProjectCompletion(
+    String projectId, {
+    required String officeId,
+  }) async {
     final snapshot = await _tasksRef
         .where('projectId', isEqualTo: projectId)
+        .where('officeId', isEqualTo: officeId)
         .get();
 
     if (snapshot.docs.isEmpty) {
@@ -101,9 +105,13 @@ class TaskRepository {
   // Streams / Queries
   // ───────────────────────────────────────────────────────────────────────────
 
-  Stream<List<TaskModel>> watchProjectTasks(String projectId) {
+  Stream<List<TaskModel>> watchProjectTasks(
+    String projectId, {
+    required String officeId,
+  }) {
     return _tasksRef
         .where('projectId', isEqualTo: projectId)
+        .where('officeId', isEqualTo: officeId)
         .snapshots()
         .map(
           (snapshot) =>
@@ -152,9 +160,13 @@ class TaskRepository {
     });
   }
 
-  Future<Map<String, int>> getProjectTaskStats(String projectId) async {
+  Future<Map<String, int>> getProjectTaskStats(
+    String projectId, {
+    required String officeId,
+  }) async {
     final snapshot = await _tasksRef
         .where('projectId', isEqualTo: projectId)
+        .where('officeId', isEqualTo: officeId)
         .get();
 
     int total = 0;
@@ -218,7 +230,7 @@ class TaskRepository {
     );
 
     await _tasksRef.add(_withUpdatedAt(data.toFirestore()));
-    await _recalculateProjectCompletion(data.projectId);
+    await _recalculateProjectCompletion(data.projectId, officeId: data.officeId);
 
     // إشعار إسناد task جديدة
     try {
@@ -241,7 +253,7 @@ class TaskRepository {
   Future<void> updateTask(TaskModel task) async {
     await _tasksRef.doc(task.id).update(_withUpdatedAt(task.toFirestore()));
 
-    await _recalculateProjectCompletion(task.projectId);
+    await _recalculateProjectCompletion(task.projectId, officeId: task.officeId);
   }
 
   Future<void> deleteTask(String taskId) async {
@@ -252,7 +264,7 @@ class TaskRepository {
       throw Exception('Cannot delete task before completion');
     }
     await _tasksRef.doc(taskId).delete();
-    await _recalculateProjectCompletion(task.projectId);
+    await _recalculateProjectCompletion(task.projectId, officeId: task.officeId);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -281,7 +293,7 @@ class TaskRepository {
         .doc(taskId)
         .update(_withUpdatedAt({'progress': resolved.toDouble()}));
 
-    await _recalculateProjectCompletion(task.projectId);
+    await _recalculateProjectCompletion(task.projectId, officeId: task.officeId);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -330,7 +342,7 @@ class TaskRepository {
       ).toDouble(),
     }));
 
-    await _recalculateProjectCompletion(task.projectId);
+    await _recalculateProjectCompletion(task.projectId, officeId: task.officeId);
     await _notify(task: task.copyWith(status: 'in_progress'),
         newStatus: 'in_progress', changedByName: userName);
   }
@@ -347,7 +359,7 @@ class TaskRepository {
       'teamLeaderReviewNotes': '',
     }));
 
-    await _recalculateProjectCompletion(task.projectId);
+    await _recalculateProjectCompletion(task.projectId, officeId: task.officeId);
     await _notify(task: task, newStatus: 'team_leader_review',
         changedByName: userName);
   }
@@ -369,7 +381,7 @@ class TaskRepository {
       'qcReviewedAt': null,
     }));
 
-    await _recalculateProjectCompletion(task.projectId);
+    await _recalculateProjectCompletion(task.projectId, officeId: task.officeId);
     await _notify(task: task, newStatus: 'qc_review', changedByName: userName);
   }
 
@@ -394,7 +406,7 @@ class TaskRepository {
       'teamLeaderReviewedAt': Timestamp.now(),
     }));
 
-    await _recalculateProjectCompletion(task.projectId);
+    await _recalculateProjectCompletion(task.projectId, officeId: task.officeId);
     await _notify(task: task, newStatus: 'in_progress',
         changedByName: userName);
   }
@@ -418,7 +430,7 @@ class TaskRepository {
       'clientReviewedAt': null,
     }));
 
-    await _recalculateProjectCompletion(task.projectId);
+    await _recalculateProjectCompletion(task.projectId, officeId: task.officeId);
     await _notify(task: task, newStatus: 'client_review',
         changedByName: userName);
   }
@@ -438,7 +450,7 @@ class TaskRepository {
       'qcReviewedAt': Timestamp.now(),
     }));
 
-    await _recalculateProjectCompletion(task.projectId);
+    await _recalculateProjectCompletion(task.projectId, officeId: task.officeId);
     await _notify(task: task, newStatus: 'team_leader_review',
         changedByName: userName);
   }
@@ -509,7 +521,7 @@ class TaskRepository {
     // Step 3: Recalculate — wrapped in try/catch
     // Client may not have read access to all project tasks, so this is best-effort
     try {
-      await _recalculateProjectCompletion(task.projectId);
+      await _recalculateProjectCompletion(task.projectId, officeId: task.officeId);
     } catch (_) {}
 
     // Step 4: Notifications — non-blocking
@@ -546,7 +558,7 @@ class TaskRepository {
     } catch (_) {}
 
     try {
-      await _recalculateProjectCompletion(task.projectId);
+      await _recalculateProjectCompletion(task.projectId, officeId: task.officeId);
     } catch (_) {}
 
     try {
@@ -649,20 +661,19 @@ class TaskRepository {
         );
   }
 
+  /// Deletes an attachment Firestore document only.
+  /// For full deletion (Firestore + Supabase Storage), use
+  /// [TaskCollaborationRepository.deleteAttachment] via
+  /// [deleteTaskAttachmentControllerProvider].
   Future<void> deleteAttachment({
     required String taskId,
     required String attachmentId,
   }) async {
-    final firestore = FirebaseFirestore.instance;
-
-    // 🔥 حذف من Firestore
-    await firestore
+    await _firestore
         .collection('tasks')
         .doc(taskId)
         .collection('attachments')
         .doc(attachmentId)
         .delete();
-
-    // ⚠️ مبدئيًا بدون حذف من Storage (نضيفه بعدين لو حبيت)
   }
 }

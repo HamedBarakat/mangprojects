@@ -14,7 +14,10 @@ import 'report_export_stub.dart'
 
 import '../../../../features/home/presentation/controllers/home_providers.dart';
 import '../../../../features/home/data/models/user_model.dart';
+import '../../../../features/employees/presentation/controllers/employee_providers.dart';
+import '../../../../features/employees/data/models/employee_model.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/employee_picker_dropdown.dart';
 
 // ── Date formatting helpers (بدون intl package) ──────────────────────────────
 String _fmtDate(dynamic v) {
@@ -74,22 +77,54 @@ String _fmtNow() {
 // REPORTS SCREEN
 // ══════════════════════════════════════════════════════════════════════════════
 
-class ReportsScreen extends ConsumerStatefulWidget {
+// ── Reports Screen ─────────────────────────────────────────────────────────────
+// Uses a two-widget pattern so the inner StatefulWidget receives the resolved
+// UserModel and can build a TabController with the exact right length from
+// initState — no mismatch, no inaccessible tabs shown to users.
+
+class ReportsScreen extends ConsumerWidget {
   const ReportsScreen({super.key});
 
   @override
-  ConsumerState<ReportsScreen> createState() => _ReportsScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider).value;
+    if (user == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return _ReportsContent(user: user);
+  }
 }
 
-class _ReportsScreenState extends ConsumerState<ReportsScreen>
+// ── _TabDef: bundles a Tab header with its body widget ───────────────────────
+
+class _TabDef {
+  final Tab tab;
+  final Widget body;
+  const _TabDef({required this.tab, required this.body});
+}
+
+// ── Inner stateful widget — owns TabController ────────────────────────────────
+
+class _ReportsContent extends StatefulWidget {
+  final UserModel user;
+  const _ReportsContent({required this.user});
+
+  @override
+  State<_ReportsContent> createState() => _ReportsContentState();
+}
+
+class _ReportsContentState extends State<_ReportsContent>
     with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+  late final TabController _tabController;
+  late final List<_TabDef> _tabDefs;
 
   @override
   void initState() {
     super.initState();
-    // Tab 6 (Employee Profile) is added below based on user permissions
-    _tabController = TabController(length: 6, vsync: this);
+    _tabDefs = _buildTabDefs(widget.user);
+    _tabController = TabController(length: _tabDefs.length, vsync: this);
   }
 
   @override
@@ -98,10 +133,44 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
     super.dispose();
   }
 
+  List<_TabDef> _buildTabDefs(UserModel user) {
+    return [
+      _TabDef(
+        tab: const Tab(icon: Icon(Icons.folder_outlined, size: 18), text: 'Projects'),
+        body: _ProjectsReportTab(user: user),
+      ),
+      _TabDef(
+        tab: const Tab(icon: Icon(Icons.task_alt_outlined, size: 18), text: 'Tasks'),
+        body: _TasksReportTab(user: user),
+      ),
+      _TabDef(
+        tab: const Tab(icon: Icon(Icons.access_time_outlined, size: 18), text: 'Attendance'),
+        body: _AttendanceReportTab(user: user),
+      ),
+      // Employees — admin / management / section heads only
+      if (user.canSeeEmployeeReports)
+        _TabDef(
+          tab: const Tab(icon: Icon(Icons.people_outline, size: 18), text: 'Employees'),
+          body: _EmployeesReportTab(user: user),
+        ),
+      // Clients — admin / management / reviewers / section heads
+      if (user.canSeeClientReports)
+        _TabDef(
+          tab: const Tab(icon: Icon(Icons.business_outlined, size: 18), text: 'Clients'),
+          body: _ClientsReportTab(user: user),
+        ),
+      // Employee Profile — admin / management / section heads only
+      if (user.canSeeEmployeeReports)
+        _TabDef(
+          tab: const Tab(icon: Icon(Icons.person_search_outlined, size: 18), text: 'Employee'),
+          body: _EmployeeProfileReportTab(user: user),
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final user = ref.watch(currentUserProvider).value;
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -119,45 +188,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
           labelColor: cs.primary,
           unselectedLabelColor: cs.onSurface.withOpacity(0.45),
           indicatorColor: cs.primary,
-          labelStyle: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-          tabs: const [
-            Tab(icon: Icon(Icons.folder_outlined, size: 18), text: 'Projects'),
-            Tab(icon: Icon(Icons.task_alt_outlined, size: 18), text: 'Tasks'),
-            Tab(
-              icon: Icon(Icons.access_time_outlined, size: 18),
-              text: 'Attendance',
-            ),
-            Tab(icon: Icon(Icons.people_outline, size: 18), text: 'Employees'),
-            Tab(icon: Icon(Icons.business_outlined, size: 18), text: 'Clients'),
-            Tab(icon: Icon(Icons.person_search_outlined, size: 18), text: 'Employee'),
-          ],
+          labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          tabs: _tabDefs.map((d) => d.tab).toList(),
         ),
       ),
-      body: user == null
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _ProjectsReportTab(user: user),
-                _TasksReportTab(user: user),
-                _AttendanceReportTab(user: user),
-                // Employee reports: restricted to management/admin/dept heads
-                user.canSeeEmployeeReports
-                    ? _EmployeesReportTab(user: user)
-                    : const _ReportAccessDenied(),
-                // Client reports: restricted to management/admin
-                user.canSeeEmployeeReports
-                    ? _ClientsReportTab(user: user)
-                    : const _ReportAccessDenied(),
-                // Employee Profile report: admin/management only
-                user.canSeeEmployeeReports
-                    ? _EmployeeProfileReportTab(user: user)
-                    : const _ReportAccessDenied(),
-              ],
-            ),
+      body: TabBarView(
+        controller: _tabController,
+        children: _tabDefs.map((d) => d.body).toList(),
+      ),
     );
   }
 }
@@ -898,29 +936,6 @@ class _AttendanceReportTabState extends State<_AttendanceReportTab> {
 // EMPLOYEES REPORT
 // ══════════════════════════════════════════════════════════════════════════════
 
-class _ReportAccessDenied extends StatelessWidget {
-  const _ReportAccessDenied();
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.lock_outline_rounded, size: 56, color: cs.subtleText),
-          const SizedBox(height: 16),
-          Text('Restricted', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: cs.onSurface)),
-          const SizedBox(height: 8),
-          Text(
-            'Employee reports are only available\nto management and department heads.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: cs.subtleText, fontSize: 13),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _EmployeesReportTab extends StatefulWidget {
   final UserModel user;
@@ -1182,15 +1197,14 @@ class _EmployeesReportTabState extends State<_EmployeesReportTab> {
 // EMPLOYEE PROFILE REPORT TAB
 // ══════════════════════════════════════════════════════════════════════════════
 
-class _EmployeeProfileReportTab extends StatefulWidget {
+class _EmployeeProfileReportTab extends ConsumerStatefulWidget {
   final UserModel user;
   const _EmployeeProfileReportTab({required this.user});
   @override
-  State<_EmployeeProfileReportTab> createState() => _EmployeeProfileReportTabState();
+  ConsumerState<_EmployeeProfileReportTab> createState() => _EmployeeProfileReportTabState();
 }
 
-class _EmployeeProfileReportTabState extends State<_EmployeeProfileReportTab> {
-  List<Map<String, dynamic>> _employees = [];
+class _EmployeeProfileReportTabState extends ConsumerState<_EmployeeProfileReportTab> {
   String? _selectedEmpId;
   Map<String, dynamic>? _selectedEmp;
   DateTime? _fromDate;
@@ -1207,28 +1221,6 @@ class _EmployeeProfileReportTabState extends State<_EmployeeProfileReportTab> {
   bool _showAttendance = true;
   bool _showLeaves = true;
   bool _showTasks = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadEmployees();
-  }
-
-  Future<void> _loadEmployees() async {
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .where('officeId', isEqualTo: widget.user.officeId)
-        .where('isActive', isEqualTo: true)
-        .get();
-    if (!mounted) return;
-    setState(() {
-      _employees = snap.docs
-          .where((d) => d.data()['role'] != 'client')
-          .map((d) => {'uid': d.id, ...d.data()})
-          .toList()
-        ..sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
-    });
-  }
 
   Future<void> _fetchData() async {
     if (_selectedEmpId == null) return;
@@ -1334,34 +1326,51 @@ class _EmployeeProfileReportTabState extends State<_EmployeeProfileReportTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Employee selector ──────────────────────────────────────────
-          DropdownButtonFormField<String>(
-            value: _selectedEmpId,
-            hint: const Text('Select employee...'),
-            isExpanded: true,
-            onChanged: (uid) {
-              setState(() {
-                _selectedEmpId = uid;
-                _selectedEmp = _employees.firstWhere(
-                    (e) => e['uid'] == uid, orElse: () => {});
-              });
-              if (_fromDate != null || _toDate != null) _fetchData();
-            },
-            decoration: InputDecoration(
-              labelText: 'Employee',
-              prefixIcon: Icon(Icons.person_outline, color: cs.primary),
-              filled: true,
-              fillColor: cs.surfaceContainerHighest,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-            items: _employees.map((e) => DropdownMenuItem<String>(
-              value: e['uid'] as String,
-              child: Text('${e['name']} — ${e['jobTitle'] ?? ''}',
-                  overflow: TextOverflow.ellipsis),
-            )).toList(),
-          ),
+          Builder(builder: (context) {
+            final employeesAsync = ref.watch(employeesProvider);
+            return employeesAsync.when(
+              loading: () => const LinearProgressIndicator(),
+              error: (_, _) => const SizedBox.shrink(),
+              data: (allEmployees) {
+                final pickable = allEmployees
+                    .where((e) => e.isActive && !e.isClient)
+                    .toList()
+                  ..sort((a, b) => a.name.compareTo(b.name));
+                return EmployeePickerDropdown(
+                  label: 'Employee',
+                  prefixIcon: Icons.person_outline,
+                  employees: pickable,
+                  selectedIds:
+                      _selectedEmpId != null ? [_selectedEmpId!] : [],
+                  multiSelect: false,
+                  hint: 'Select employee...',
+                  onChanged: (ids, names) {
+                    final uid = ids.isEmpty ? null : ids.first;
+                    final emp = uid == null
+                        ? null
+                        : pickable
+                            .where((e) => e.uid == uid)
+                            .firstOrNull;
+                    setState(() {
+                      _selectedEmpId = uid;
+                      _selectedEmp = emp == null
+                          ? null
+                          : {
+                              'uid': emp.uid,
+                              'name': emp.name,
+                              'jobTitle': emp.jobTitle,
+                              'department': emp.department,
+                            };
+                    });
+                    if (uid != null &&
+                        (_fromDate != null || _toDate != null)) {
+                      _fetchData();
+                    }
+                  },
+                );
+              },
+            );
+          }),
           const SizedBox(height: 12),
 
           // ── Date range ─────────────────────────────────────────────────

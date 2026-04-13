@@ -26,6 +26,7 @@ import '../../../reports/presentation/screens/report_export_stub.dart'
     if (dart.library.io) '../../../reports/presentation/screens/report_export_mobile.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../notifications/presentation/controllers/notification_providers.dart';
+import '../../../../core/widgets/employee_picker_dropdown.dart';
 
 class ProjectDetailsScreen extends ConsumerStatefulWidget {
   final ProjectModel project;
@@ -1152,145 +1153,54 @@ class _AddEditTaskSheetState extends ConsumerState<_AddEditTaskSheet> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  'Assign Engineers *',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: cs.onSurface.withOpacity(0.8),
+                // ── Engineers (multi-select) ─────────────────────────────
+                if (isDisciplineSelected && engineerFallback)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      'No engineers in ${_selectedDiscipline!} — showing all',
+                      style: const TextStyle(fontSize: 11, color: Colors.orange),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isDisciplineSelected
-                      ? engineerFallback
-                          ? 'No engineers in ${_selectedDiscipline!} — showing all'
-                          : 'Showing engineers in: ${_selectedDiscipline!}'
-                      : 'Select a discipline first to filter engineers',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: engineerFallback
-                        ? Colors.orange
-                        : isDisciplineSelected
-                            ? cs.primary.withOpacity(0.7)
-                            : cs.onSurface.withOpacity(0.45),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                GestureDetector(
-                  onTap: () async {
-                    await showDialog(
-                      context: context,
-                      builder: (_) => _EngineersPickerDialog(
-                        engineers: filteredEngineers,
-                        selectedIds: Set.from(_selectedEngineerIds),
-                        selectedNames: List.from(_selectedEngineerNames),
-                        onChanged: (ids, names) {
-                          setState(() {
-                            _selectedEngineerIds
-                              ..clear()
-                              ..addAll(ids);
-                            _selectedEngineerNames
-                              ..clear()
-                              ..addAll(names);
-                            _errorMessage = null;
-                          });
-                        },
-                      ),
-                    );
+                EmployeePickerDropdown(
+                  label: 'Assign Engineers *',
+                  prefixIcon: Icons.engineering_outlined,
+                  employees: filteredEngineers,
+                  selectedIds: _selectedEngineerIds.toList(),
+                  multiSelect: true,
+                  onChanged: (ids, names) {
+                    setState(() {
+                      _selectedEngineerIds
+                        ..clear()
+                        ..addAll(ids);
+                      _selectedEngineerNames
+                        ..clear()
+                        ..addAll(names);
+                      _errorMessage = null;
+                    });
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _selectedEngineerNames.isEmpty
-                              ? Text(
-                                  'Select engineers...',
-                                  style: TextStyle(
-                                    color: cs.onSurface.withOpacity(0.45),
-                                  ),
-                                )
-                              : Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: _selectedEngineerNames
-                                      .map(
-                                        (name) => Chip(
-                                          label: Text(
-                                            name,
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          visualDensity: VisualDensity.compact,
-                                          deleteIcon: const Icon(
-                                            Icons.close,
-                                            size: 14,
-                                          ),
-                                          onDeleted: () {
-                                            setState(() {
-                                              final eng = engineers.firstWhere(
-                                                (e) => e.name == name,
-                                                orElse: () => engineers.first,
-                                              );
-                                              _selectedEngineerIds.remove(
-                                                eng.uid,
-                                              );
-                                              _selectedEngineerNames.remove(
-                                                name,
-                                              );
-                                            });
-                                          },
-                                        ),
-                                      )
-                                      .toList(),
-                                ),
-                        ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          color: cs.onSurface.withOpacity(0.5),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: _selectedReviewer ?? '',
-                  decoration: _inputDecoration('Assign Reviewer', cs),
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: '',
-                      child: Text('No Reviewer'),
-                    ),
-                    ...filteredReviewers.map(
-                      (e) => DropdownMenuItem<String>(
-                        value: e.uid,
-                        child: Text(e.name),
-                      ),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    if (v == null || v.isEmpty) {
-                      setState(() {
+                // ── Reviewer (single-select) ──────────────────────────────
+                EmployeePickerDropdown(
+                  label: 'Assign Reviewer',
+                  prefixIcon: Icons.verified_outlined,
+                  employees: filteredReviewers,
+                  selectedIds: _selectedReviewer != null &&
+                          filteredReviewers.any((e) => e.uid == _selectedReviewer)
+                      ? [_selectedReviewer!]
+                      : [],
+                  multiSelect: false,
+                  hint: 'No Reviewer',
+                  onChanged: (ids, names) {
+                    setState(() {
+                      if (ids.isEmpty) {
                         _selectedReviewer = null;
                         _selectedReviewerName = '';
-                      });
-                      return;
-                    }
-
-                    final rev = reviewers.where((e) => e.uid == v).firstOrNull;
-                    setState(() {
-                      _selectedReviewer = v;
-                      _selectedReviewerName = rev?.name ?? '';
+                      } else {
+                        _selectedReviewer = ids.first;
+                        _selectedReviewerName = names.first;
+                      }
                     });
                   },
                 ),
@@ -3683,245 +3593,6 @@ void _rptExcelRow(Sheet sheet, List<CellValue> values, int rowIndex) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ENGINEERS MULTI-SELECT DIALOG
-// ─────────────────────────────────────────────────────────────────────────────
+// Note: _EngineersPickerDialog removed — replaced by EmployeePickerDropdown
+// from lib/core/widgets/employee_picker_dropdown.dart
 
-class _EngineersPickerDialog extends StatefulWidget {
-  final List<dynamic> engineers;
-  final Set<String> selectedIds;
-  final List<String> selectedNames;
-  final void Function(Set<String> ids, List<String> names) onChanged;
-
-  const _EngineersPickerDialog({
-    required this.engineers,
-    required this.selectedIds,
-    required this.selectedNames,
-    required this.onChanged,
-  });
-
-  @override
-  State<_EngineersPickerDialog> createState() => _EngineersPickerDialogState();
-}
-
-class _EngineersPickerDialogState extends State<_EngineersPickerDialog> {
-  late Set<String> _ids;
-  late List<String> _names;
-  String _search = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _ids = Set.from(widget.selectedIds);
-    _names = List.from(widget.selectedNames);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final filtered = widget.engineers
-        .where((e) => e.name.toLowerCase().contains(_search.toLowerCase()))
-        .toList();
-
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.7,
-          maxWidth: 420,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── Header ──
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-              child: Row(
-                children: [
-                  Icon(Icons.group_outlined, color: cs.primary, size: 20),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Assign Engineers',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (_ids.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.primary.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${_ids.length} selected',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: cs.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            // ── Search ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search...',
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                  filled: true,
-                  fillColor: cs.surfaceContainerHighest,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                  isDense: true,
-                ),
-                onChanged: (v) => setState(() => _search = v),
-              ),
-            ),
-            const SizedBox(height: 8),
-            // ── List ──
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: filtered.length,
-                itemBuilder: (_, i) {
-                  final e = filtered[i];
-                  final checked = _ids.contains(e.uid);
-                  return InkWell(
-                    onTap: () {
-                      setState(() {
-                        if (checked) {
-                          _ids.remove(e.uid);
-                          _names.remove(e.name);
-                        } else {
-                          _ids.add(e.uid);
-                          if (!_names.contains(e.name)) _names.add(e.name);
-                        }
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: checked
-                                  ? cs.primary
-                                  : cs.surfaceContainerHighest,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: checked
-                                  ? const Icon(
-                                      Icons.check,
-                                      size: 18,
-                                      color: Colors.white,
-                                    )
-                                  : Text(
-                                      e.name.isNotEmpty
-                                          ? e.name[0].toUpperCase()
-                                          : '?',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: cs.onSurface.withOpacity(0.6),
-                                      ),
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  e.name,
-                                  style: TextStyle(
-                                    fontWeight: checked
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
-                                    color: checked ? cs.primary : cs.onSurface,
-                                  ),
-                                ),
-                                Text(
-                                  e.roleLabel,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: cs.onSurface.withOpacity(0.5),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (checked)
-                            Icon(
-                              Icons.check_circle,
-                              color: cs.primary,
-                              size: 20,
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            // ── Footer ──
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        widget.onChanged(_ids, _names);
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: cs.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: Text('Confirm (${_ids.length})'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

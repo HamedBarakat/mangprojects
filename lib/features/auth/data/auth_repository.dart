@@ -60,7 +60,7 @@ class AuthRepository {
   }) async {
     const apiKey = 'AIzaSyCT_DzOXrc13yux8rV_p0kfcjEdlFogPsw';
 
-    debugPrint('==> Android REST API login for $email');
+    if (kDebugMode) debugPrint('==> Android REST API login for $email');
     final restResponse = await http.post(
       Uri.parse(
         'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$apiKey',
@@ -74,7 +74,7 @@ class AuthRepository {
     );
 
     final restData = jsonDecode(restResponse.body);
-    debugPrint('==> REST status: ${restResponse.statusCode}');
+    if (kDebugMode) debugPrint('==> REST status: ${restResponse.statusCode}');
 
     if (restResponse.statusCode != 200) {
       final errorCode = restData['error']?['message'] ?? 'UNKNOWN_ERROR';
@@ -87,7 +87,7 @@ class AuthRepository {
     // REST succeeded — store uid and token for manual auth state
     androidUid = restData['localId'] as String;
     androidIdToken = restData['idToken'] as String;
-    debugPrint('==> Android login success! uid=$androidUid');
+    if (kDebugMode) debugPrint('==> Android login success! uid=$androidUid');
   }
 
   String _mapErrorCode(String errorCode) {

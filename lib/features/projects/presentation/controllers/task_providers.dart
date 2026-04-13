@@ -32,7 +32,12 @@ final projectTasksProvider = StreamProvider.family<List<TaskModel>, String>((
   final uid = ref.watch(effectiveUidProvider);
   if (uid == null) return const Stream.empty();
 
-  return ref.watch(taskRepositoryProvider).watchProjectTasks(projectId);
+  final user = ref.watch(currentUserProvider).value;
+  if (user == null) return const Stream.empty();
+
+  return ref
+      .watch(taskRepositoryProvider)
+      .watchProjectTasks(projectId, officeId: user.officeId);
 });
 
 final myTasksProvider = StreamProvider<List<TaskModel>>((ref) async* {
@@ -79,7 +84,11 @@ final projectTaskStatsProvider =
       // ✅ Wait for valid auth via effectiveUidProvider
       final uid = ref.watch(effectiveUidProvider);
       if (uid == null) return {};
-      return ref.watch(taskRepositoryProvider).getProjectTaskStats(projectId);
+      final user = ref.watch(currentUserProvider).value;
+      if (user == null) return {};
+      return ref
+          .watch(taskRepositoryProvider)
+          .getProjectTaskStats(projectId, officeId: user.officeId);
     });
 
 final teamLeaderReviewTasksProvider =

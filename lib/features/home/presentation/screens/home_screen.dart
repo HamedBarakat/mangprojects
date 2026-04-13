@@ -30,6 +30,7 @@ import '../../../notifications/presentation/controllers/notification_providers.d
 import '../../../leaves/presentation/screens/leaves_screen.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/theme_provider.dart';
+import '../../../../core/services/fcm_service.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -77,6 +78,8 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
             .read(officeSettingsRepositoryProvider)
             .initializeSettings(widget.user.officeId);
       }
+      // Initialise FCM: request permission, save token, listen for messages
+      FcmService().init(widget.user.uid);
     });
   }
 
@@ -152,7 +155,7 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
             color: cs.subtleText,
             tooltip: 'Logout',
             onPressed: () async {
-              await _performLogout(ref);
+              await _performLogout();
             },
           ),
         ],
@@ -392,18 +395,15 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
     if (hour < 17) return 'Good Afternoon 👋';
     return 'Good Evening 👋';
   }
-}
 
   // ── Logout: clear all caches and reset providers ─────────────────────────
-  Future<void> _performLogout(WidgetRef ref) async {
+  Future<void> _performLogout() async {
     // Invalidate ALL providers BEFORE sign-out so all Firestore streams
     // are cancelled and recreated fresh when the next user logs in.
-    // projectTasksProvider and projectTaskStatsProvider are family providers
-    // that hold per-project streams — invalidating by type clears all instances.
-    // Invalidate repositories first — forces fresh Firestore instance
+    // Invalidate repositories first — forces fresh Firestore instance.
     ref.invalidate(taskRepositoryProvider);
     ref.invalidate(projectRepositoryProvider);
-    // Then invalidate all derived providers
+    // Invalidate all derived providers
     ref.invalidate(currentUserProvider);
     ref.invalidate(projectsProvider);
     ref.invalidate(singleProjectProvider);
@@ -413,14 +413,17 @@ class _HomeScaffoldState extends ConsumerState<_HomeScaffold> {
     ref.invalidate(teamLeaderReviewTasksProvider);
     ref.invalidate(qcReviewTasksProvider);
     ref.invalidate(unreadNotificationsCountProvider);
+    ref.invalidate(myNotificationsProvider);
     ref.invalidate(employeesProvider);
 
-    // Clear selected office from local storage
+    // Clear all local storage and deselect office
+    await ref.read(localStorageProvider).clearAll();
     await ref.read(selectedOfficeProvider.notifier).clearOffice();
 
     // Sign out — authStateChanges stream fires → AuthWrapper shows LoginScreen
     await FirebaseAuth.instance.signOut();
   }
+}
 
 
 // ── Dashboard Tab ─────────────────────────────────────────────────────────────
